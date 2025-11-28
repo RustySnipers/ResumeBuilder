@@ -1,0 +1,16 @@
+# AI-Powered ATS-Friendly Resume Builder - Backend Dependencies
+# Phase 1: Foundation and Compliance Backend
+
+# Core Framework
+fastapi==0.115.5
+pydantic==2.10.3
+pydantic-settings==2.6.1
+
+# ASGI Server
+uvicorn[standard]==0.34.0
+
+# HTTP Client (for future API integrations)
+httpx==0.28.1
+
+# Python Version: 3.10+
+# Install with: pip install -r requirements.txt
