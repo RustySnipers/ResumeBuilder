@@ -69,8 +69,13 @@ from backend.llm.response_validator import ResponseValidator
 from backend.llm.cache import LLMCache
 from backend.llm.retry_logic import RetryConfig, retry_with_exponential_backoff
 
-# Import Auth router (Phase 4)
+# Import Auth routers (Phase 4)
 from backend.auth.router import router as auth_router
+from backend.auth.api_key_router import router as api_key_router
+
+# Import middleware (Phase 4)
+from backend.middleware.rate_limit import RateLimitMiddleware
+from backend.auth.rate_limiter import UserRateLimiter
 
 import os
 
@@ -88,8 +93,16 @@ app = FastAPI(
     version="1.4.0-phase4"
 )
 
-# Include Phase 4 authentication router
+# Include Phase 4 authentication routers
 app.include_router(auth_router)
+app.include_router(api_key_router)
+
+# Initialize Rate Limiting (Phase 4)
+REDIS_URL_RATE = os.getenv("REDIS_URL", "redis://localhost:6379")
+user_rate_limiter = UserRateLimiter(redis_url=REDIS_URL_RATE)
+
+# Add rate limiting middleware (optional - uncomment to enable)
+# app.add_middleware(RateLimitMiddleware, redis_url=REDIS_URL_RATE)
 
 # ============================================================================
 # Initialize NLP Modules (Phase 2.2)

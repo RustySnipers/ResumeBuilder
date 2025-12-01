@@ -484,3 +484,37 @@ async def reset_password(
         status_code=status.HTTP_501_NOT_IMPLEMENTED,
         detail="Password reset feature not fully implemented yet",
     )
+
+
+# ============================================================================
+# Rate Limit Status
+# ============================================================================
+
+@router.get("/rate-limit/status")
+async def get_rate_limit_status(
+    current_user: User = Depends(get_current_active_user),
+):
+    """
+    Get current rate limit status for authenticated user.
+
+    Shows limits, usage, and remaining requests.
+    """
+    from backend.auth.rate_limiter import UserRateLimiter
+    import os
+
+    # Initialize rate limiter
+    redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
+    rate_limiter = UserRateLimiter(redis_url=redis_url)
+
+    # Get user roles
+    user_roles = [role.name for role in current_user.roles] if current_user.roles else ["user"]
+
+    # Get stats
+    stats = await rate_limiter.get_user_stats(
+        user_id=str(current_user.id),
+        user_roles=user_roles,
+    )
+
+    await rate_limiter.disconnect()
+
+    return stats
