@@ -77,6 +77,9 @@ from backend.auth.api_key_router import router as api_key_router
 from backend.middleware.rate_limit import RateLimitMiddleware
 from backend.auth.rate_limiter import UserRateLimiter
 
+# Import Export router (Phase 5)
+from backend.export.router import router as export_router
+
 import os
 
 # Configure logging
@@ -89,13 +92,16 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(
     title="ATS Resume Builder API",
-    description="Secure, compliant backend for AI-powered resume tailoring with streaming and authentication",
-    version="1.4.0-phase4"
+    description="Secure, compliant backend for AI-powered resume tailoring with streaming, authentication, and export",
+    version="1.5.0-phase5"
 )
 
 # Include Phase 4 authentication routers
 app.include_router(auth_router)
 app.include_router(api_key_router)
+
+# Include Phase 5 export router
+app.include_router(export_router)
 
 # Initialize Rate Limiting (Phase 4)
 REDIS_URL_RATE = os.getenv("REDIS_URL", "redis://localhost:6379")
