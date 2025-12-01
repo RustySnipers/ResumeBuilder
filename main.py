@@ -48,11 +48,13 @@ TODO Phase 5: Production Features
 """
 
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from typing import List
 import re
 from collections import Counter
 import logging
+import json
 
 # Import enhanced NLP modules (Phase 2.2)
 from backend.nlp.pii_detector import PIIDetector
@@ -60,9 +62,12 @@ from backend.nlp.semantic_analyzer import SemanticAnalyzer
 from backend.nlp.keyword_extractor import KeywordExtractor
 from backend.nlp.section_parser import SectionParser
 
-# Import LLM modules (Phase 3.1)
+# Import LLM modules (Phase 3.1 & 3.2)
 from backend.llm.claude_client import ClaudeClient
 from backend.llm.prompts import PromptTemplates
+from backend.llm.response_validator import ResponseValidator
+from backend.llm.cache import LLMCache
+from backend.llm.retry_logic import RetryConfig, retry_with_exponential_backoff
 import os
 
 # Configure logging
@@ -75,8 +80,8 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(
     title="ATS Resume Builder API",
-    description="Secure, compliant backend for AI-powered resume tailoring",
-    version="1.2.0-phase3.1"
+    description="Secure, compliant backend for AI-powered resume tailoring with streaming",
+    version="1.3.0-phase3.2"
 )
 
 # ============================================================================
@@ -89,10 +94,13 @@ semantic_analyzer = SemanticAnalyzer()
 keyword_extractor = KeywordExtractor()
 section_parser = SectionParser()
 
-# Initialize Claude client (Phase 3.1)
+# Initialize Claude client (Phase 3.1 & 3.2)
 # API key from environment variable for security
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 claude_client = None
+response_validator = ResponseValidator(min_length=100, max_length=50000)
+llm_cache = None
+
 if ANTHROPIC_API_KEY:
     claude_client = ClaudeClient(
         api_key=ANTHROPIC_API_KEY,
@@ -100,6 +108,11 @@ if ANTHROPIC_API_KEY:
         max_tokens=4096,
     )
     logger.info("Claude client initialized successfully")
+
+    # Initialize LLM cache (Phase 3.2)
+    REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
+    llm_cache = LLMCache(redis_url=REDIS_URL, ttl_seconds=3600)
+    logger.info("LLM cache initialized")
 else:
     logger.warning("ANTHROPIC_API_KEY not set - LLM generation endpoints will be unavailable")
 
@@ -334,15 +347,32 @@ def enhanced_gap_analysis(resume: str, job_description: str) -> GapAnalysisResul
 # API Endpoints
 # ============================================================================
 
+@app.on_event("startup")
+async def startup_event():
+    """Initialize connections on startup."""
+    if llm_cache:
+        await llm_cache.connect()
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Clean up connections on shutdown."""
+    if llm_cache:
+        await llm_cache.disconnect()
+
+
 @app.get("/")
 async def root():
     """Health check endpoint."""
+    cache_stats = await llm_cache.get_stats() if llm_cache else {}
     return {
         "service": "ATS Resume Builder API",
-        "version": "1.2.0-phase3.1",
+        "version": "1.3.0-phase3.2",
         "status": "operational",
-        "phase": "Anthropic Claude API Integration",
-        "llm_available": claude_client is not None
+        "phase": "Advanced LLM Features & Streaming",
+        "llm_available": claude_client is not None,
+        "cache_enabled": llm_cache is not None,
+        "cached_responses": cache_stats.get("total_keys", 0)
     }
 
 
@@ -395,14 +425,16 @@ async def analyze_resume(resume_input: ResumeInput) -> GapAnalysisResult:
 @app.post("/api/v1/generate", response_model=OptimizedResumeResponse)
 async def generate_optimized_resume(resume_input: ResumeInput) -> OptimizedResumeResponse:
     """
-    Generate optimized resume using Claude AI (Phase 3.1).
+    Generate optimized resume using Claude AI (Phase 3.1 & 3.2).
 
     This endpoint:
     1. Accepts resume and job description
     2. Applies mandatory PII redaction
     3. Performs gap analysis
-    4. Uses Claude to generate optimized resume
-    5. Returns optimized resume with changes and usage stats
+    4. Checks cache for previous response
+    5. Uses Claude to generate optimized resume (with retry logic)
+    6. Validates response quality
+    7. Returns optimized resume with changes and usage stats
 
     Args:
         resume_input: ResumeInput containing job description and resume text
@@ -417,6 +449,7 @@ async def generate_optimized_resume(resume_input: ResumeInput) -> OptimizedResum
         - PII redaction applied before LLM interaction
         - API key stored in environment variable
         - Cost tracking enabled
+        - Response validation for safety
     """
     # Check if Claude client is available
     if not claude_client:
@@ -446,12 +479,55 @@ async def generate_optimized_resume(resume_input: ResumeInput) -> OptimizedResum
             semantic_similarity=analysis.semantic_similarity,
         )
 
-        # Call Claude API
         system_prompt = PromptTemplates.get_system_prompt()
-        response = await claude_client.generate(
-            prompt=prompt,
-            system_prompt=system_prompt,
-        )
+
+        # Check cache first (Phase 3.2)
+        cached_response = None
+        if llm_cache:
+            cached_response = await llm_cache.get(
+                prompt=prompt,
+                system_prompt=system_prompt,
+                model=claude_client.model,
+                max_tokens=claude_client.max_tokens,
+                temperature=claude_client.temperature,
+            )
+
+        if cached_response:
+            logger.info("Using cached LLM response")
+            response = cached_response
+            response["cached"] = True
+        else:
+            # Call Claude API with retry logic (Phase 3.2)
+            async def generate_with_retry():
+                return await claude_client.generate(
+                    prompt=prompt,
+                    system_prompt=system_prompt,
+                )
+
+            retry_config = RetryConfig(max_retries=3, initial_delay=1.0)
+            response = await retry_with_exponential_backoff(
+                generate_with_retry,
+                retry_config,
+            )
+            response["cached"] = False
+
+            # Cache the response
+            if llm_cache:
+                await llm_cache.set(
+                    prompt=prompt,
+                    system_prompt=system_prompt,
+                    model=claude_client.model,
+                    max_tokens=claude_client.max_tokens,
+                    temperature=claude_client.temperature,
+                    response=response,
+                )
+
+        # Validate response (Phase 3.2)
+        is_valid, issues = response_validator.validate(response["content"])
+        if not is_valid:
+            logger.warning(f"Response validation issues: {issues}")
+            # Sanitize response
+            response["content"] = response_validator.sanitize(response["content"])
 
         # Parse Claude's response to extract sections
         content = response["content"]
@@ -522,6 +598,127 @@ async def get_usage_stats():
         )
 
     return claude_client.get_usage_stats()
+
+
+@app.post("/api/v1/generate/stream")
+async def generate_optimized_resume_stream(resume_input: ResumeInput):
+    """
+    Generate optimized resume using Claude AI with streaming (Phase 3.2).
+
+    This endpoint streams the response in real-time using Server-Sent Events (SSE).
+
+    Args:
+        resume_input: ResumeInput containing job description and resume text
+
+    Returns:
+        StreamingResponse with SSE events
+
+    Raises:
+        HTTPException: If LLM is unavailable or processing errors occur
+
+    Security:
+        - PII redaction applied before LLM interaction
+        - API key stored in environment variable
+    """
+    if not claude_client:
+        raise HTTPException(
+            status_code=503,
+            detail="LLM service unavailable. ANTHROPIC_API_KEY not configured."
+        )
+
+    # MANDATORY SECURITY GATE: Redact PII
+    job_description_redacted = redact_pii(resume_input.job_description_text)
+    resume_redacted = redact_pii(resume_input.resume_raw_text)
+
+    # Perform gap analysis
+    analysis = enhanced_gap_analysis(
+        resume=resume_redacted,
+        job_description=job_description_redacted
+    )
+
+    # Generate optimization prompt
+    prompt = PromptTemplates.generate_resume_optimization(
+        original_resume=resume_redacted,
+        job_description=job_description_redacted,
+        missing_keywords=analysis.missing_keywords,
+        suggestions=analysis.suggestions,
+        match_score=analysis.match_score,
+        semantic_similarity=analysis.semantic_similarity,
+    )
+
+    system_prompt = PromptTemplates.get_system_prompt()
+
+    async def event_generator():
+        """Generate Server-Sent Events."""
+        try:
+            # Send initial event
+            yield f"data: {json.dumps({'type': 'start', 'message': 'Starting resume optimization...'})}\n\n"
+
+            # Stream response from Claude
+            full_response = ""
+            async for chunk in claude_client.generate_stream(
+                prompt=prompt,
+                system_prompt=system_prompt,
+            ):
+                full_response += chunk
+                # Send chunk event
+                yield f"data: {json.dumps({'type': 'chunk', 'content': chunk})}\n\n"
+
+            # Validate complete response
+            is_valid, issues = response_validator.validate(full_response)
+            if not is_valid:
+                yield f"data: {json.dumps({'type': 'warning', 'issues': issues})}\n\n"
+
+            # Send completion event
+            yield f"data: {json.dumps({'type': 'done', 'message': 'Optimization complete'})}\n\n"
+
+        except Exception as e:
+            logger.error(f"Error in streaming generation: {str(e)}")
+            yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+        }
+    )
+
+
+@app.get("/api/v1/cache/stats")
+async def get_cache_stats():
+    """
+    Get LLM cache statistics (Phase 3.2).
+
+    Returns:
+        Dictionary with cache statistics
+    """
+    if not llm_cache:
+        raise HTTPException(
+            status_code=503,
+            detail="Cache not enabled"
+        )
+
+    return await llm_cache.get_stats()
+
+
+@app.delete("/api/v1/cache")
+async def clear_cache():
+    """
+    Clear all cached LLM responses (Phase 3.2).
+
+    Returns:
+        Success message
+    """
+    if not llm_cache:
+        raise HTTPException(
+            status_code=503,
+            detail="Cache not enabled"
+        )
+
+    success = await llm_cache.clear_all()
+    return {"success": success, "message": "Cache cleared"}
 
 
 # ============================================================================
