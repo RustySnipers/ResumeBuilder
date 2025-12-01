@@ -68,6 +68,10 @@ from backend.llm.prompts import PromptTemplates
 from backend.llm.response_validator import ResponseValidator
 from backend.llm.cache import LLMCache
 from backend.llm.retry_logic import RetryConfig, retry_with_exponential_backoff
+
+# Import Auth router (Phase 4)
+from backend.auth.router import router as auth_router
+
 import os
 
 # Configure logging
@@ -80,9 +84,12 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(
     title="ATS Resume Builder API",
-    description="Secure, compliant backend for AI-powered resume tailoring with streaming",
-    version="1.3.0-phase3.2"
+    description="Secure, compliant backend for AI-powered resume tailoring with streaming and authentication",
+    version="1.4.0-phase4"
 )
+
+# Include Phase 4 authentication router
+app.include_router(auth_router)
 
 # ============================================================================
 # Initialize NLP Modules (Phase 2.2)
