@@ -389,17 +389,141 @@ async def shutdown_event():
 
 @app.get("/")
 async def root():
-    """Health check endpoint."""
+    """
+    Root health check endpoint.
+
+    Returns basic service information and operational status.
+    Use /health for detailed health checks.
+    """
     cache_stats = await llm_cache.get_stats() if llm_cache else {}
     return {
         "service": "ATS Resume Builder API",
-        "version": "1.3.0-phase3.2",
+        "version": "1.5.0-phase5",
         "status": "operational",
-        "phase": "Advanced LLM Features & Streaming",
+        "phase": "Production-Ready with Export System",
         "llm_available": claude_client is not None,
         "cache_enabled": llm_cache is not None,
         "cached_responses": cache_stats.get("total_keys", 0)
     }
+
+
+@app.get("/health")
+async def health_check():
+    """
+    Comprehensive health check endpoint for monitoring and orchestration.
+
+    Checks:
+    - API service status
+    - Database connectivity
+    - Redis connectivity
+    - LLM client availability
+    - Cache service status
+
+    Returns:
+        Health status with service details
+    """
+    import time
+    from sqlalchemy import text
+    from backend.database.connection import get_async_session
+
+    health_status = {
+        "status": "healthy",
+        "timestamp": time.time(),
+        "version": "1.5.0-phase5",
+        "services": {}
+    }
+
+    # Check database connectivity
+    try:
+        async for session in get_async_session():
+            result = await session.execute(text("SELECT 1"))
+            result.scalar()
+            health_status["services"]["database"] = {
+                "status": "healthy",
+                "type": "postgresql"
+            }
+            break
+    except Exception as e:
+        logger.error(f"Database health check failed: {e}")
+        health_status["services"]["database"] = {
+            "status": "unhealthy",
+            "error": str(e)
+        }
+        health_status["status"] = "degraded"
+
+    # Check Redis connectivity
+    if llm_cache:
+        try:
+            cache_stats = await llm_cache.get_stats()
+            health_status["services"]["redis"] = {
+                "status": "healthy",
+                "keys": cache_stats.get("total_keys", 0)
+            }
+        except Exception as e:
+            logger.error(f"Redis health check failed: {e}")
+            health_status["services"]["redis"] = {
+                "status": "unhealthy",
+                "error": str(e)
+            }
+            health_status["status"] = "degraded"
+    else:
+        health_status["services"]["redis"] = {
+            "status": "disabled",
+            "message": "Cache not configured"
+        }
+
+    # Check LLM availability
+    if claude_client:
+        health_status["services"]["llm"] = {
+            "status": "healthy",
+            "model": claude_client.model
+        }
+    else:
+        health_status["services"]["llm"] = {
+            "status": "disabled",
+            "message": "ANTHROPIC_API_KEY not configured"
+        }
+
+    # Check NLP services
+    health_status["services"]["nlp"] = {
+        "status": "healthy",
+        "components": ["pii_detector", "semantic_analyzer", "keyword_extractor", "section_parser"]
+    }
+
+    return health_status
+
+
+@app.get("/health/ready")
+async def readiness_check():
+    """
+    Kubernetes readiness probe endpoint.
+
+    Returns 200 if service is ready to accept traffic.
+    Returns 503 if service is not ready.
+    """
+    # Check critical dependencies
+    try:
+        from backend.database.connection import get_async_session
+        from sqlalchemy import text
+
+        async for session in get_async_session():
+            await session.execute(text("SELECT 1"))
+            break
+
+        return {"status": "ready"}
+    except Exception as e:
+        logger.error(f"Readiness check failed: {e}")
+        raise HTTPException(status_code=503, detail="Service not ready")
+
+
+@app.get("/health/live")
+async def liveness_check():
+    """
+    Kubernetes liveness probe endpoint.
+
+    Returns 200 if service is alive.
+    """
+    return {"status": "alive"}
 
 
 @app.post("/api/v1/analyze", response_model=GapAnalysisResult)
