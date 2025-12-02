@@ -1,7 +1,7 @@
 """
-Export Router - Phase 5
+Export Router - Phase 5 (Production Hardened)
 
-FastAPI endpoints for resume export functionality.
+FastAPI endpoints for resume export functionality with rate limiting and caching.
 """
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -10,10 +10,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional
 from pydantic import BaseModel, Field
 import logging
+import os
 
 from backend.export.pdf_generator import PDFGenerator
 from backend.export.docx_generator import DOCXGenerator
 from backend.export.template_engine import TemplateEngine
+from backend.export.rate_limiter import ExportRateLimiter
+from backend.export.cache import ExportCache
 from backend.auth.dependencies import get_current_active_user
 from backend.database.session import get_session
 from backend.repositories.resume_repository import ResumeRepository
@@ -24,6 +27,14 @@ import uuid
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/export", tags=["Export"])
+
+# Initialize rate limiter and cache
+REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
+export_rate_limiter = ExportRateLimiter(redis_url=REDIS_URL)
+export_cache = ExportCache(redis_url=REDIS_URL)
+
+# File size limit (10MB)
+MAX_EXPORT_SIZE = 10 * 1024 * 1024
 
 
 # ============================================================================
@@ -57,10 +68,20 @@ async def export_pdf(
     session: AsyncSession = Depends(get_session),
 ):
     """
-    Export resume as PDF.
+    Export resume as PDF with rate limiting and caching.
+
+    Rate Limits:
+    - 10 exports per minute per user
+    - 50 exports per day per user
 
     Returns a PDF file download.
     """
+    # Check rate limit
+    rate_limit_info = export_rate_limiter.check_rate_limit(
+        user_id=str(current_user.id),
+        operation="pdf"
+    )
+
     resume_repo = ResumeRepository(session)
     audit_repo = AuditLogRepository(session)
 
@@ -90,6 +111,28 @@ async def export_pdf(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Not authorized to export this resume",
             )
+
+    # Check cache
+    cached_pdf = export_cache.get(
+        resume_id=export_request.resume_id,
+        format="pdf",
+        template=export_request.template
+    )
+
+    if cached_pdf:
+        logger.info(f"Serving cached PDF for resume {resume.id}")
+        filename = f"resume_{resume.title.replace(' ', '_')}.pdf"
+        return Response(
+            content=cached_pdf,
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": f"attachment; filename={filename}",
+                "Content-Length": str(len(cached_pdf)),
+                "X-Cache-Hit": "true",
+                "X-RateLimit-Remaining-Minute": str(rate_limit_info.get("remaining_minute", -1)),
+                "X-RateLimit-Remaining-Day": str(rate_limit_info.get("remaining_day", -1)),
+            },
+        )
 
     # Prepare resume data
     resume_data = {
@@ -108,17 +151,32 @@ async def export_pdf(
             template=export_request.template,
         )
 
+        # Validate file size
+        if len(pdf_bytes) > MAX_EXPORT_SIZE:
+            raise HTTPException(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                detail=f"Generated PDF exceeds maximum size limit of {MAX_EXPORT_SIZE // (1024*1024)}MB",
+            )
+
+        # Cache the result
+        export_cache.set(
+            resume_id=export_request.resume_id,
+            format="pdf",
+            template=export_request.template,
+            data=pdf_bytes
+        )
+
         # Log export
         await audit_repo.log_event(
             action="resume_exported",
             user_id=current_user.id,
             resource="resumes",
             resource_id=resume.id,
-            metadata={"format": "pdf", "template": export_request.template},
+            metadata={"format": "pdf", "template": export_request.template, "size_bytes": len(pdf_bytes)},
         )
         await session.commit()
 
-        logger.info(f"Exported resume {resume.id} as PDF for user {current_user.email}")
+        logger.info(f"Exported resume {resume.id} as PDF for user {current_user.email} ({len(pdf_bytes)} bytes)")
 
         # Return PDF file
         filename = f"resume_{resume.title.replace(' ', '_')}.pdf"
@@ -128,6 +186,9 @@ async def export_pdf(
             headers={
                 "Content-Disposition": f"attachment; filename={filename}",
                 "Content-Length": str(len(pdf_bytes)),
+                "X-Cache-Hit": "false",
+                "X-RateLimit-Remaining-Minute": str(rate_limit_info.get("remaining_minute", -1)),
+                "X-RateLimit-Remaining-Day": str(rate_limit_info.get("remaining_day", -1)),
             },
         )
 
@@ -146,10 +207,20 @@ async def export_docx(
     session: AsyncSession = Depends(get_session),
 ):
     """
-    Export resume as DOCX (Microsoft Word).
+    Export resume as DOCX (Microsoft Word) with rate limiting and caching.
+
+    Rate Limits:
+    - 10 exports per minute per user
+    - 50 exports per day per user
 
     Returns a DOCX file download.
     """
+    # Check rate limit
+    rate_limit_info = export_rate_limiter.check_rate_limit(
+        user_id=str(current_user.id),
+        operation="docx"
+    )
+
     resume_repo = ResumeRepository(session)
     audit_repo = AuditLogRepository(session)
 
@@ -180,6 +251,28 @@ async def export_docx(
                 detail="Not authorized to export this resume",
             )
 
+    # Check cache
+    cached_docx = export_cache.get(
+        resume_id=export_request.resume_id,
+        format="docx",
+        template=export_request.template
+    )
+
+    if cached_docx:
+        logger.info(f"Serving cached DOCX for resume {resume.id}")
+        filename = f"resume_{resume.title.replace(' ', '_')}.docx"
+        return Response(
+            content=cached_docx,
+            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            headers={
+                "Content-Disposition": f"attachment; filename={filename}",
+                "Content-Length": str(len(cached_docx)),
+                "X-Cache-Hit": "true",
+                "X-RateLimit-Remaining-Minute": str(rate_limit_info.get("remaining_minute", -1)),
+                "X-RateLimit-Remaining-Day": str(rate_limit_info.get("remaining_day", -1)),
+            },
+        )
+
     # Prepare resume data
     resume_data = {
         "name": current_user.full_name,
@@ -197,17 +290,32 @@ async def export_docx(
             template=export_request.template,
         )
 
+        # Validate file size
+        if len(docx_bytes) > MAX_EXPORT_SIZE:
+            raise HTTPException(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                detail=f"Generated DOCX exceeds maximum size limit of {MAX_EXPORT_SIZE // (1024*1024)}MB",
+            )
+
+        # Cache the result
+        export_cache.set(
+            resume_id=export_request.resume_id,
+            format="docx",
+            template=export_request.template,
+            data=docx_bytes
+        )
+
         # Log export
         await audit_repo.log_event(
             action="resume_exported",
             user_id=current_user.id,
             resource="resumes",
             resource_id=resume.id,
-            metadata={"format": "docx", "template": export_request.template},
+            metadata={"format": "docx", "template": export_request.template, "size_bytes": len(docx_bytes)},
         )
         await session.commit()
 
-        logger.info(f"Exported resume {resume.id} as DOCX for user {current_user.email}")
+        logger.info(f"Exported resume {resume.id} as DOCX for user {current_user.email} ({len(docx_bytes)} bytes)")
 
         # Return DOCX file
         filename = f"resume_{resume.title.replace(' ', '_')}.docx"
@@ -217,6 +325,9 @@ async def export_docx(
             headers={
                 "Content-Disposition": f"attachment; filename={filename}",
                 "Content-Length": str(len(docx_bytes)),
+                "X-Cache-Hit": "false",
+                "X-RateLimit-Remaining-Minute": str(rate_limit_info.get("remaining_minute", -1)),
+                "X-RateLimit-Remaining-Day": str(rate_limit_info.get("remaining_day", -1)),
             },
         )
 

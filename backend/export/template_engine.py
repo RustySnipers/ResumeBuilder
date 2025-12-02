@@ -74,32 +74,36 @@ class TemplateEngine:
         """
         templates = [
             {
+                "id": "professional",
+                "name": "Professional",
+                "description": "Balanced, professional appearance with blue accents. Great for corporate roles.",
+                "category": "professional",
+                "preview_url": "/static/previews/professional.png",
+                "ats_score": 100,
+            },
+            {
                 "id": "modern",
                 "name": "Modern Professional",
-                "description": "Clean, modern design with accent colors",
+                "description": "Contemporary design with gradient header. Perfect for tech and creative industries.",
                 "category": "modern",
                 "preview_url": "/static/previews/modern.png",
+                "ats_score": 95,
             },
             {
                 "id": "classic",
-                "name": "Classic Professional",
-                "description": "Traditional, conservative layout",
+                "name": "Classic",
+                "description": "Traditional serif layout with conservative styling. Ideal for law, finance, and academia.",
                 "category": "classic",
                 "preview_url": "/static/previews/classic.png",
-            },
-            {
-                "id": "professional",
-                "name": "Professional",
-                "description": "Balanced, professional appearance",
-                "category": "professional",
-                "preview_url": "/static/previews/professional.png",
+                "ats_score": 100,
             },
             {
                 "id": "minimal",
                 "name": "Minimal",
-                "description": "Minimalist design with maximum readability",
+                "description": "Clean, minimalist design with maximum white space. Best for design and creative fields.",
                 "category": "minimal",
                 "preview_url": "/static/previews/minimal.png",
+                "ats_score": 98,
             },
         ]
 
