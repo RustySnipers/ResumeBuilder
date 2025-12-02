@@ -16,6 +16,7 @@ from backend.models.user_role import UserRole
 from backend.models.api_key import APIKey
 from backend.models.audit_log import AuditLog
 from backend.models.session import Session
+from backend.models.verification_token import VerificationToken, TokenType
 
 __all__ = [
     # Core models
@@ -30,4 +31,6 @@ __all__ = [
     "APIKey",
     "AuditLog",
     "Session",
+    "VerificationToken",
+    "TokenType",
 ]
