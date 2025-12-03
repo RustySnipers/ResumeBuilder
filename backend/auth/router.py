@@ -37,17 +37,26 @@ from backend.auth.schemas import (
     PasswordChange,
     PasswordResetRequest,
     PasswordReset,
+    EmailVerificationRequest,
+    EmailVerificationConfirm,
+    EmailVerificationResponse,
 )
 from backend.database.session import get_session
 from backend.repositories.user_repository import UserRepository
 from backend.repositories.session_repository import SessionRepository
 from backend.repositories.audit_log_repository import AuditLogRepository
 from backend.repositories.role_repository import RoleRepository
+from backend.repositories.verification_token_repository import VerificationTokenRepository
 from backend.models.user import User
+from backend.models.verification_token import VerificationToken, TokenType
+from backend.email.service import EmailService, EmailConfig
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
+
+# Initialize email service
+email_service = EmailService(EmailConfig.from_env())
 
 
 # ============================================================================
@@ -63,11 +72,15 @@ async def register_user(
     """
     Register a new user.
 
-    Creates a new user account with hashed password and assigns default "user" role.
+    Creates a new user account with hashed password, assigns default "user" role,
+    and sends email verification link.
     """
+    import os
+
     user_repo = UserRepository(session)
     role_repo = RoleRepository(session)
     audit_repo = AuditLogRepository(session)
+    token_repo = VerificationTokenRepository(session)
 
     # Check if email already exists
     existing_user = await user_repo.get_by_email(user_data.email)
@@ -92,6 +105,13 @@ async def register_user(
     if default_role:
         await role_repo.assign_role_to_user(user.id, default_role.id)
 
+    # Create email verification token
+    verification_token = VerificationToken.create_email_verification_token(
+        user_id=user.id,
+        ip_address=request.client.host if request.client else None
+    )
+    session.add(verification_token)
+
     # Commit transaction
     await session.commit()
     await session.refresh(user)
@@ -104,6 +124,19 @@ async def register_user(
         user_agent=request.headers.get("user-agent"),
     )
     await session.commit()
+
+    # Send verification email (async, don't wait for completion)
+    base_url = os.getenv("APP_BASE_URL", "http://localhost:3000")
+    try:
+        await email_service.send_verification_email(
+            to=user.email,
+            verification_token=verification_token.token,
+            base_url=base_url
+        )
+        logger.info(f"Verification email sent to: {user.email}")
+    except Exception as e:
+        logger.error(f"Failed to send verification email to {user.email}: {e}")
+        # Don't fail registration if email fails
 
     logger.info(f"New user registered: {user.email}")
 
@@ -395,6 +428,151 @@ async def update_current_user_profile(
 
 
 # ============================================================================
+# Email Verification
+# ============================================================================
+
+@router.post("/request-verification", response_model=EmailVerificationResponse, status_code=status.HTTP_200_OK)
+async def request_email_verification(
+    verification_request: EmailVerificationRequest,
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+):
+    """
+    Request email verification link.
+
+    Sends a new verification email to the user's email address.
+    Returns success even if email doesn't exist to prevent email enumeration.
+    """
+    import os
+
+    user_repo = UserRepository(session)
+    token_repo = VerificationTokenRepository(session)
+    audit_repo = AuditLogRepository(session)
+
+    # Look up user
+    user = await user_repo.get_by_email(verification_request.email)
+
+    if user:
+        # Check if already verified
+        if user.is_verified:
+            return EmailVerificationResponse(
+                message="Email is already verified",
+                email_verified=True
+            )
+
+        # Invalidate any existing verification tokens for this user
+        await token_repo.invalidate_user_tokens(user.id, TokenType.EMAIL_VERIFICATION)
+
+        # Create new verification token
+        verification_token = VerificationToken.create_email_verification_token(
+            user_id=user.id,
+            ip_address=request.client.host if request.client else None
+        )
+        session.add(verification_token)
+        await session.commit()
+
+        # Send verification email
+        base_url = os.getenv("APP_BASE_URL", "http://localhost:3000")
+        try:
+            await email_service.send_verification_email(
+                to=user.email,
+                verification_token=verification_token.token,
+                base_url=base_url
+            )
+            logger.info(f"Verification email sent to: {user.email}")
+        except Exception as e:
+            logger.error(f"Failed to send verification email to {user.email}: {e}")
+
+        # Log audit event
+        await audit_repo.log_event(
+            action="email_verification_requested",
+            user_id=user.id,
+            ip_address=request.client.host if request.client else None,
+        )
+        await session.commit()
+
+    # Always return success (prevent email enumeration)
+    return EmailVerificationResponse(
+        message="If the email exists, a verification link has been sent",
+        email_verified=False
+    )
+
+
+@router.post("/verify-email", response_model=EmailVerificationResponse, status_code=status.HTTP_200_OK)
+async def verify_email(
+    verification: EmailVerificationConfirm,
+    session: AsyncSession = Depends(get_session),
+):
+    """
+    Verify email address with token.
+
+    Validates the verification token and marks the user's email as verified.
+    """
+    from datetime import datetime
+
+    user_repo = UserRepository(session)
+    token_repo = VerificationTokenRepository(session)
+    audit_repo = AuditLogRepository(session)
+
+    # Get valid token
+    token = await token_repo.get_valid_token(verification.token, TokenType.EMAIL_VERIFICATION)
+
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired verification token"
+        )
+
+    # Get user
+    user = await user_repo.get_by_id(token.user_id)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+
+    # Check if already verified
+    if user.is_verified:
+        # Mark token as used anyway
+        token.mark_as_used()
+        await session.commit()
+
+        return EmailVerificationResponse(
+            message="Email was already verified",
+            email_verified=True
+        )
+
+    # Mark email as verified
+    user.is_verified = True
+    user.email_verified_at = datetime.utcnow()
+
+    # Mark token as used
+    token.mark_as_used()
+
+    # Log audit event
+    await audit_repo.log_event(
+        action="email_verified",
+        user_id=user.id,
+    )
+
+    await session.commit()
+
+    # Send welcome email
+    try:
+        await email_service.send_welcome_email(to=user.email, name=user.full_name)
+        logger.info(f"Welcome email sent to: {user.email}")
+    except Exception as e:
+        logger.error(f"Failed to send welcome email to {user.email}: {e}")
+
+    logger.info(f"Email verified for user: {user.email}")
+
+    return EmailVerificationResponse(
+        message="Email successfully verified",
+        email_verified=True
+    )
+
+
+# ============================================================================
 # Password Management
 # ============================================================================
 
@@ -439,26 +617,54 @@ async def change_password(
 @router.post("/forgot-password", status_code=status.HTTP_202_ACCEPTED)
 async def forgot_password(
     password_reset_request: PasswordResetRequest,
+    request: Request,
     session: AsyncSession = Depends(get_session),
 ):
     """
     Request password reset email.
 
-    Note: In production, this would send an email with a reset token.
-    For now, we just return success (to prevent email enumeration).
+    Sends a password reset link to the user's email if it exists.
+    Always returns success to prevent email enumeration.
     """
+    import os
+
     user_repo = UserRepository(session)
+    token_repo = VerificationTokenRepository(session)
     audit_repo = AuditLogRepository(session)
 
     # Look up user (but don't reveal if they exist)
     user = await user_repo.get_by_email(password_reset_request.email)
 
     if user:
-        # TODO: Generate reset token and send email
-        # For now, just log the event
+        # Invalidate any existing password reset tokens for this user
+        await token_repo.invalidate_user_tokens(user.id, TokenType.PASSWORD_RESET)
+
+        # Create password reset token (expires in 1 hour)
+        reset_token = VerificationToken.create_password_reset_token(
+            user_id=user.id,
+            expires_hours=1,
+            ip_address=request.client.host if request.client else None
+        )
+        session.add(reset_token)
+        await session.commit()
+
+        # Send password reset email
+        base_url = os.getenv("APP_BASE_URL", "http://localhost:3000")
+        try:
+            await email_service.send_password_reset_email(
+                to=user.email,
+                reset_token=reset_token.token,
+                base_url=base_url
+            )
+            logger.info(f"Password reset email sent to: {user.email}")
+        except Exception as e:
+            logger.error(f"Failed to send password reset email to {user.email}: {e}")
+
+        # Log audit event
         await audit_repo.log_event(
             action="password_reset_requested",
             user_id=user.id,
+            ip_address=request.client.host if request.client else None,
         )
         await session.commit()
 
@@ -476,14 +682,65 @@ async def reset_password(
     """
     Reset password with token.
 
-    Note: Token verification logic needs to be implemented.
+    Validates the reset token and updates the user's password.
     """
-    # TODO: Verify reset token, extract user_id
-    # For now, return error as this feature is not fully implemented
-    raise HTTPException(
-        status_code=status.HTTP_501_NOT_IMPLEMENTED,
-        detail="Password reset feature not fully implemented yet",
+    user_repo = UserRepository(session)
+    token_repo = VerificationTokenRepository(session)
+    session_repo = SessionRepository(session)
+    audit_repo = AuditLogRepository(session)
+
+    # Get valid password reset token
+    token = await token_repo.get_valid_token(password_reset.token, TokenType.PASSWORD_RESET)
+
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired password reset token"
+        )
+
+    # Get user
+    user = await user_repo.get_by_id(token.user_id)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+
+    # Hash new password
+    new_hashed_password = hash_password(password_reset.new_password)
+
+    # Update password
+    await user_repo.update(user.id, hashed_password=new_hashed_password)
+
+    # Mark token as used
+    token.mark_as_used()
+
+    # Revoke all sessions (force re-login for security)
+    await session_repo.revoke_all_user_sessions(user.id)
+
+    # Log password reset
+    await audit_repo.log_event(
+        action="password_reset_completed",
+        user_id=user.id,
     )
+
+    await session.commit()
+
+    # Send password changed notification email
+    try:
+        from backend.email.templates import EmailTemplates
+        html_body = EmailTemplates.password_changed_email(name=user.full_name)
+        await email_service.send_email(
+            to=user.email,
+            subject="Your Password Has Been Changed",
+            html_body=html_body
+        )
+        logger.info(f"Password changed notification sent to: {user.email}")
+    except Exception as e:
+        logger.error(f"Failed to send password changed email to {user.email}: {e}")
+
+    logger.info(f"Password reset completed for user: {user.email}")
+
 
 
 # ============================================================================

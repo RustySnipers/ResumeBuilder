@@ -133,6 +133,26 @@ class PasswordReset(BaseModel):
 
 
 # ============================================================================
+# Email Verification
+# ============================================================================
+
+class EmailVerificationRequest(BaseModel):
+    """Request email verification"""
+    email: EmailStr
+
+
+class EmailVerificationConfirm(BaseModel):
+    """Confirm email with token"""
+    token: str
+
+
+class EmailVerificationResponse(BaseModel):
+    """Email verification response"""
+    message: str
+    email_verified: bool = False
+
+
+# ============================================================================
 # API Keys
 # ============================================================================
 
