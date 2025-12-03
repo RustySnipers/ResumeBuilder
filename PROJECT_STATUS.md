@@ -344,16 +344,19 @@
 
 ### Phase 7: Webhook System ✅
 **Completed:** 2025-12-03
-**Commits:** 053e1e2, 3c6cf20
+**Commits:** 053e1e2, 3c6cf20, f1f3f79, 1ef96d2, 4ff5126
 
 **Deliverables:**
 - Complete webhook system for third-party integrations
 - User-configurable webhooks with event subscriptions
 - HMAC-SHA256 signature verification
-- HTTP delivery with retry logic
-- 11 supported event types (resume, analysis, export, user events)
-- 9 webhook API endpoints
+- HTTP delivery with exponential backoff retry logic
+- 11 supported event types (7 integrated, 4 pending)
+- 9 webhook management API endpoints
+- 5 resume CRUD API endpoints with webhooks
+- Background worker for automatic event processing
 - Webhook delivery logs and statistics
+- Complete integration with export, auth, and resume endpoints
 
 **Data Models (2 new):**
 - `Webhook` - Webhook configurations with HMAC secrets
@@ -373,7 +376,7 @@
 - **Export**: completed, failed
 - **User**: email_verified, password_changed
 
-**API Endpoints Added (9 new):**
+**Webhook Management API Endpoints (9 new):**
 - `POST /api/v1/webhooks` - Create webhook
 - `GET /api/v1/webhooks` - List user webhooks
 - `GET /api/v1/webhooks/{id}` - Get webhook details
@@ -383,6 +386,13 @@
 - `GET /api/v1/webhooks/{id}/events` - List webhook delivery events
 - `GET /api/v1/webhooks/{id}/statistics` - Get delivery statistics
 - `GET /api/v1/webhooks/event-types/available` - List available event types
+
+**Resume CRUD API Endpoints (5 new):**
+- `POST /api/v1/resumes` - Create resume with PII redaction
+- `GET /api/v1/resumes` - List user's resumes (paginated)
+- `GET /api/v1/resumes/{id}` - Get specific resume
+- `PUT /api/v1/resumes/{id}` - Update resume
+- `DELETE /api/v1/resumes/{id}` - Delete resume
 
 **Webhook Features:**
 - ✅ Event subscription filtering (JSON array of event types)
@@ -441,6 +451,28 @@
   - HTTP delivery with retry logic
   - Statistics and event management
 
+**Webhook Integration (7 event types integrated):**
+- **Export Endpoints** - PDF and DOCX export triggers
+  - `export.completed` - Successful exports (PDF/DOCX)
+  - `export.failed` - Failed exports (PDF/DOCX)
+- **Auth Endpoints** - User account events
+  - `user.email_verified` - Email verification success
+  - `user.password_changed` - Password change success
+- **Resume Endpoints** - Resume CRUD operations
+  - `resume.created` - New resume created
+  - `resume.updated` - Resume updated
+  - `resume.deleted` - Resume deleted
+
+**Background Worker:**
+- `WebhookWorker` - Automatic event processing
+  - Continuous processing loop (default 10s cycle)
+  - Processes pending events (batch size: 100)
+  - Processes retry events with exponential backoff
+  - Graceful shutdown on SIGTERM/SIGINT
+  - Health monitoring and statistics
+  - Configurable via environment variables
+  - Production-ready with error resilience
+
 **Quality Gates Achieved:**
 - ✅ Secure HMAC signature verification
 - ✅ Robust error handling and retry logic
@@ -450,16 +482,37 @@
 - ✅ Comprehensive event logging
 
 **Key Files:**
+
+**Part 1 - Webhook Foundation:**
 - `backend/models/webhook.py` - Webhook model (200 lines)
 - `backend/models/webhook_event.py` - Event log model (220 lines)
 - `backend/repositories/webhook_repository.py` - Webhook repo (180 lines)
 - `backend/repositories/webhook_event_repository.py` - Event repo (240 lines)
+- `alembic/versions/d5e6f7g8h9i0_phase_7_webhook_tables.py` - Migration
+
+**Part 2 - Webhook Service & API:**
 - `backend/webhooks/service.py` - Webhook service (500+ lines)
 - `backend/webhooks/router.py` - API endpoints (350+ lines)
 - `backend/webhooks/schemas.py` - Pydantic schemas (150+ lines)
 - `backend/webhooks/__init__.py` - Module exports
-- `alembic/versions/d5e6f7g8h9i0_phase_7_webhook_tables.py` - Migration
-- `main.py` - Updated to v1.7.0-phase7, includes webhook router
+
+**Part 3 - Webhook Integration:**
+- `backend/export/router.py` - Enhanced with webhook triggers (PDF/DOCX)
+- `backend/auth/router.py` - Enhanced with webhook triggers (email/password)
+- `WEBHOOK_INTEGRATION.md` - Integration documentation (320 lines)
+
+**Part 4 - Background Worker:**
+- `backend/webhooks/worker.py` - Webhook worker (330 lines)
+- `scripts/run_webhook_worker.py` - Startup script (54 lines)
+- `WEBHOOK_WORKER.md` - Worker documentation (498 lines)
+
+**Part 5 - Resume CRUD:**
+- `backend/resumes/router.py` - Resume CRUD endpoints (340 lines)
+- `backend/resumes/schemas.py` - Resume API schemas (62 lines)
+- `backend/resumes/__init__.py` - Module exports (8 lines)
+
+**Configuration:**
+- `main.py` - Updated to v1.7.0-phase7, integrated webhook and resume routers
 
 ---
 
@@ -934,8 +987,10 @@ Pillow==10.1.0
 6. **PHASE_5_SUMMARY.md** - Export implementation (755 lines)
 7. **ARCHITECTURE_NOTES.md** - System architecture
 8. **DEPLOYMENT.md** - Production deployment guide (900+ lines)
-9. **backend/repositories/README.md** - Repository pattern guide
-10. **backend/llm/README.md** - LLM integration guide
+9. **WEBHOOK_INTEGRATION.md** - Webhook integration guide (320 lines)
+10. **WEBHOOK_WORKER.md** - Background worker documentation (498 lines)
+11. **backend/repositories/README.md** - Repository pattern guide
+12. **backend/llm/README.md** - LLM integration guide
 
 ### Code Documentation
 - Docstrings on all classes and methods
@@ -969,6 +1024,10 @@ Pillow==10.1.0
 19. **83d4c78** - Phase 6: Update PROJECT_STATUS.md with Analytics Dashboard documentation
 20. **053e1e2** - Phase 7: Webhook System - Part 1 (Models, Migration, Repositories)
 21. **3c6cf20** - Phase 7: Webhook System - Part 2 (Service, API Endpoints, Delivery)
+22. **5fac9af** - Phase 7: Update PROJECT_STATUS.md with complete webhook system documentation
+23. **f1f3f79** - Phase 7: Integrate webhook triggers into export and auth endpoints
+24. **1ef96d2** - Phase 7: Implement background webhook worker for automatic event processing
+25. **4ff5126** - Phase 7: Add Resume CRUD endpoints with webhook integration
 
 ### Branch
 - **Name:** `claude/resumebuilder-phases-2-7-01LzPSkKV3Uj5iCaN6QQe1pm`
@@ -1043,10 +1102,16 @@ Pillow==10.1.0
 - [x] Webhook system implementation (Phase 7)
 - [x] HMAC-SHA256 signature verification for webhooks
 - [x] Event delivery with exponential backoff retry logic
-- [x] 11 webhook event types (resume, analysis, export, user)
+- [x] 11 webhook event types (7 integrated, 4 pending)
 - [x] 9 webhook API endpoints (CRUD + monitoring)
 - [x] Webhook delivery logs and statistics
 - [x] Webhook data models and repositories
+- [x] Resume CRUD API endpoints (5 endpoints)
+- [x] Webhook integration for resume operations (created, updated, deleted)
+- [x] Webhook integration for export operations (completed, failed)
+- [x] Webhook integration for auth operations (email verified, password changed)
+- [x] Background webhook worker for automatic event processing
+- [x] Webhook worker documentation and startup scripts
 
 ### ⏳ Pending (High Priority)
 - [ ] End-to-end integration tests (full workflow)
@@ -1172,9 +1237,14 @@ Pillow==10.1.0
 - Daily metric aggregation for performance
 - Webhook system for third-party integrations (Phase 7)
 - HMAC-SHA256 secured webhook delivery
-- 11 event types with configurable subscriptions
+- 7 of 11 event types integrated (64% coverage)
 - Exponential backoff retry for failed deliveries
 - 9 webhook API endpoints for complete management
+- Background webhook worker for automatic event processing
+- Resume CRUD API with 5 endpoints
+- Webhook triggers for resume operations (create, update, delete)
+- Webhook triggers for export operations (PDF/DOCX success/failure)
+- Webhook triggers for auth operations (email verified, password changed)
 
 **📊 Performance:**
 - 50-100x faster on cache hits (50ms vs 2-5s)
@@ -1244,12 +1314,14 @@ Pillow==10.1.0
 - ✅ Webhook system with 9 endpoints (Phase 7)
 - ✅ HMAC signature verification implemented
 - ✅ Webhook event delivery with retry logic
+- ✅ Background webhook worker for automatic processing
+- ✅ Resume CRUD endpoints with webhook integration
+- ✅ 7 event types integrated (resume, export, auth)
 - ✅ Database migrations ready (alembic upgrade head)
 
 **Recommendation:**
 - **Option 1:** Deploy to production (AWS ECS, GCP Cloud Run, or Kubernetes) - READY NOW
-- **Option 2:** Integrate webhook triggers into existing endpoints (resume ops, analysis, exports)
-- **Option 3:** Implement background worker for webhook event processing
-- **Option 4:** Implement Kubernetes manifests for k8s deployment
-- **Option 5:** Add email verification reminder cron job
-- **Option 6:** Implement daily metrics aggregation cron job
+- **Option 2:** Implement Kubernetes manifests for k8s deployment
+- **Option 3:** Add email verification reminder cron job
+- **Option 4:** Implement daily metrics aggregation cron job
+- **Option 5:** Add analysis/generation webhook events (requires endpoint refactoring)
