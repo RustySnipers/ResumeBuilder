@@ -86,6 +86,9 @@ from backend.analytics.router import router as analytics_router
 # Import Analytics middleware (Phase 6)
 from backend.middleware.analytics import AnalyticsMiddleware
 
+# Import Webhook router (Phase 7)
+from backend.webhooks.router import router as webhook_router
+
 import os
 
 # Configure logging
@@ -98,8 +101,8 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(
     title="ATS Resume Builder API",
-    description="Secure, compliant backend for AI-powered resume tailoring with streaming, authentication, export, and analytics",
-    version="1.6.0-phase6"
+    description="Secure, compliant backend for AI-powered resume tailoring with streaming, authentication, export, analytics, and webhooks",
+    version="1.7.0-phase7"
 )
 
 # Include Phase 4 authentication routers
@@ -111,6 +114,9 @@ app.include_router(export_router)
 
 # Include Phase 6 analytics router
 app.include_router(analytics_router)
+
+# Include Phase 7 webhook router
+app.include_router(webhook_router)
 
 # Initialize Rate Limiting (Phase 4)
 REDIS_URL_RATE = os.getenv("REDIS_URL", "redis://localhost:6379")
