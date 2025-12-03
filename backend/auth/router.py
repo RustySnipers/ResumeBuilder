@@ -48,6 +48,8 @@ from backend.repositories.audit_log_repository import AuditLogRepository
 from backend.repositories.role_repository import RoleRepository
 from backend.repositories.verification_token_repository import VerificationTokenRepository
 from backend.models.user import User
+from backend.models.webhook import WebhookEventType
+from backend.webhooks.service import WebhookService
 from backend.models.verification_token import VerificationToken, TokenType
 from backend.email.service import EmailService, EmailConfig
 
@@ -557,6 +559,25 @@ async def verify_email(
 
     await session.commit()
 
+    # Trigger webhook event for email verification
+    try:
+        webhook_service = WebhookService(session)
+        await webhook_service.trigger_event(
+            event_type=WebhookEventType.USER_EMAIL_VERIFIED,
+            event_id=user.id,
+            payload={
+                "user_id": str(user.id),
+                "email": user.email,
+                "full_name": user.full_name,
+                "verified_at": user.email_verified_at.isoformat() if user.email_verified_at else None,
+            },
+            user_id=user.id,
+        )
+        await session.commit()
+    except Exception as webhook_error:
+        # Log webhook error but don't fail the verification
+        logger.error(f"Failed to trigger webhook for email verification: {webhook_error}")
+
     # Send welcome email
     try:
         await email_service.send_welcome_email(to=user.email, name=user.full_name)
@@ -583,6 +604,8 @@ async def change_password(
     session: AsyncSession = Depends(get_session),
 ):
     """Change user password."""
+    from datetime import datetime
+
     user_repo = UserRepository(session)
     session_repo = SessionRepository(session)
     audit_repo = AuditLogRepository(session)
@@ -612,6 +635,25 @@ async def change_password(
     await session.commit()
 
     logger.info(f"Password changed for user: {current_user.email}")
+
+    # Trigger webhook event for password change
+    try:
+        webhook_service = WebhookService(session)
+        await webhook_service.trigger_event(
+            event_type=WebhookEventType.USER_PASSWORD_CHANGED,
+            event_id=current_user.id,
+            payload={
+                "user_id": str(current_user.id),
+                "email": current_user.email,
+                "full_name": current_user.full_name,
+                "changed_at": datetime.utcnow().isoformat(),
+            },
+            user_id=current_user.id,
+        )
+        await session.commit()
+    except Exception as webhook_error:
+        # Log webhook error but don't fail the password change
+        logger.error(f"Failed to trigger webhook for password change: {webhook_error}")
 
 
 @router.post("/forgot-password", status_code=status.HTTP_202_ACCEPTED)
