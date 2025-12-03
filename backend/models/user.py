@@ -39,6 +39,11 @@ class User(Base):
         api_keys: User's API keys
         audit_logs: User's audit log entries
         sessions: User's active sessions
+        verification_tokens: User's email verification tokens (Phase 5.2)
+        activities: User's activity log (Phase 6)
+        analysis_metrics: User's analysis metrics (Phase 6)
+        export_metrics: User's export metrics (Phase 6)
+        daily_metrics: User's daily aggregated metrics (Phase 6)
     """
 
     __tablename__ = "users"
@@ -92,6 +97,20 @@ class User(Base):
     )
     verification_tokens = relationship(
         "VerificationToken", back_populates="user", cascade="all, delete-orphan"
+    )
+
+    # Phase 6: Analytics relationships
+    activities = relationship(
+        "UserActivity", back_populates="user", cascade="all, delete-orphan"
+    )
+    analysis_metrics = relationship(
+        "AnalysisMetric", back_populates="user", cascade="all, delete-orphan"
+    )
+    export_metrics = relationship(
+        "ExportMetric", back_populates="user", cascade="all, delete-orphan"
+    )
+    daily_metrics = relationship(
+        "DailyMetric", back_populates="user", cascade="all, delete-orphan"
     )
 
     def __repr__(self) -> str:

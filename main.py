@@ -80,6 +80,12 @@ from backend.auth.rate_limiter import UserRateLimiter
 # Import Export router (Phase 5)
 from backend.export.router import router as export_router
 
+# Import Analytics router (Phase 6)
+from backend.analytics.router import router as analytics_router
+
+# Import Analytics middleware (Phase 6)
+from backend.middleware.analytics import AnalyticsMiddleware
+
 import os
 
 # Configure logging
@@ -92,8 +98,8 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(
     title="ATS Resume Builder API",
-    description="Secure, compliant backend for AI-powered resume tailoring with streaming, authentication, and export",
-    version="1.5.0-phase5"
+    description="Secure, compliant backend for AI-powered resume tailoring with streaming, authentication, export, and analytics",
+    version="1.6.0-phase6"
 )
 
 # Include Phase 4 authentication routers
@@ -103,12 +109,18 @@ app.include_router(api_key_router)
 # Include Phase 5 export router
 app.include_router(export_router)
 
+# Include Phase 6 analytics router
+app.include_router(analytics_router)
+
 # Initialize Rate Limiting (Phase 4)
 REDIS_URL_RATE = os.getenv("REDIS_URL", "redis://localhost:6379")
 user_rate_limiter = UserRateLimiter(redis_url=REDIS_URL_RATE)
 
 # Add rate limiting middleware (optional - uncomment to enable)
 # app.add_middleware(RateLimitMiddleware, redis_url=REDIS_URL_RATE)
+
+# Add analytics tracking middleware (Phase 6 - optional - uncomment to enable)
+# app.add_middleware(AnalyticsMiddleware)
 
 # ============================================================================
 # Initialize NLP Modules (Phase 2.2)

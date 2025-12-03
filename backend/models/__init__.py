@@ -18,6 +18,12 @@ from backend.models.audit_log import AuditLog
 from backend.models.session import Session
 from backend.models.verification_token import VerificationToken, TokenType
 
+# Phase 6: Analytics Models
+from backend.models.user_activity import UserActivity, ActivityType
+from backend.models.analysis_metric import AnalysisMetric
+from backend.models.export_metric import ExportMetric, ExportFormat
+from backend.models.daily_metric import DailyMetric
+
 __all__ = [
     # Core models
     "User",
@@ -33,4 +39,11 @@ __all__ = [
     "Session",
     "VerificationToken",
     "TokenType",
+    # Phase 6: Analytics models
+    "UserActivity",
+    "ActivityType",
+    "AnalysisMetric",
+    "ExportMetric",
+    "ExportFormat",
+    "DailyMetric",
 ]
