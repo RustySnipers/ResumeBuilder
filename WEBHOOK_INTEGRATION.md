@@ -74,7 +74,57 @@ Webhook events are automatically triggered when specific actions occur in the sy
   }
   ```
 
-### 2. Authentication Endpoints
+### 2. Resume Endpoints
+
+#### Resume Creation: `POST /api/v1/resumes`
+
+**Event:** `resume.created`
+- **Triggered:** When user creates a new resume
+- **Event ID:** Resume UUID
+- **Payload:**
+  ```json
+  {
+    "resume_id": "uuid",
+    "user_id": "uuid",
+    "title": "Resume Title",
+    "version": 1,
+    "created_at": "2025-12-03T10:30:45.123456"
+  }
+  ```
+
+#### Resume Update: `PUT /api/v1/resumes/{id}`
+
+**Event:** `resume.updated`
+- **Triggered:** When user updates an existing resume
+- **Event ID:** Resume UUID
+- **Payload:**
+  ```json
+  {
+    "resume_id": "uuid",
+    "user_id": "uuid",
+    "title": "Updated Resume Title",
+    "version": 1,
+    "updated_at": "2025-12-03T11:45:30.123456"
+  }
+  ```
+
+#### Resume Deletion: `DELETE /api/v1/resumes/{id}`
+
+**Event:** `resume.deleted`
+- **Triggered:** When user deletes a resume
+- **Event ID:** Resume UUID
+- **Payload:**
+  ```json
+  {
+    "resume_id": "uuid",
+    "user_id": "uuid",
+    "title": "Deleted Resume Title",
+    "version": 1,
+    "deleted_at": "2025-12-03T12:00:00.123456"
+  }
+  ```
+
+### 3. Authentication Endpoints
 
 #### Email Verification: `POST /auth/verify-email`
 
@@ -125,14 +175,12 @@ Webhook triggers use graceful error handling:
 
 The following endpoints do **NOT** currently trigger webhooks because they lack necessary context (authentication, entity IDs, or database persistence):
 
-### Resume Operations
+### Analysis & Generation Operations
 - `POST /api/v1/analyze` - Analysis endpoint (no auth, no persistence)
 - `POST /api/v1/generate` - Generation endpoint (no auth, no persistence)
+- `POST /api/v1/generate/stream` - Streaming generation (no auth, no persistence)
 
 **Potential Events (not yet integrated):**
-- `resume.created` - Would trigger when a resume is persisted to database
-- `resume.updated` - Would trigger when a resume is updated
-- `resume.deleted` - Would trigger when a resume is deleted
 - `analysis.completed` - Would trigger after successful analysis
 - `analysis.failed` - Would trigger when analysis fails
 - `generation.completed` - Would trigger after successful generation
@@ -142,12 +190,7 @@ The following endpoints do **NOT** currently trigger webhooks because they lack 
 
 ### Recommended Next Steps
 
-1. **Add Resume CRUD Endpoints with Webhooks:**
-   - Create authenticated endpoints for resume creation/update/delete
-   - Add database persistence
-   - Integrate webhook triggers
-
-2. **Enhance Analysis/Generation Endpoints:**
+1. **Enhance Analysis/Generation Endpoints:**
    - Add authentication requirement
    - Add database persistence for analysis results
    - Integrate webhook triggers
@@ -181,7 +224,14 @@ curl -X POST http://localhost:8000/api/v1/webhooks \
   -H "Content-Type: application/json" \
   -d '{
     "url": "https://webhook.site/your-unique-url",
-    "events": ["export.completed", "user.email_verified", "user.password_changed"],
+    "events": [
+      "resume.created",
+      "resume.updated",
+      "resume.deleted",
+      "export.completed",
+      "user.email_verified",
+      "user.password_changed"
+    ],
     "description": "Test webhook",
     "timeout_seconds": 30,
     "max_retries": 3
@@ -190,9 +240,28 @@ curl -X POST http://localhost:8000/api/v1/webhooks \
 
 ### Trigger Events
 
-1. **Export Event:** Export a resume as PDF or DOCX
-2. **Email Verification Event:** Verify an email address
-3. **Password Change Event:** Change your password
+1. **Resume Events:** Create, update, or delete a resume
+   ```bash
+   # Create resume
+   curl -X POST http://localhost:8000/api/v1/resumes \
+     -H "Authorization: Bearer $TOKEN" \
+     -H "Content-Type: application/json" \
+     -d '{"title":"Test Resume","raw_text":"Resume content..."}'
+
+   # Update resume
+   curl -X PUT http://localhost:8000/api/v1/resumes/{id} \
+     -H "Authorization: Bearer $TOKEN" \
+     -H "Content-Type: application/json" \
+     -d '{"title":"Updated Resume"}'
+
+   # Delete resume
+   curl -X DELETE http://localhost:8000/api/v1/resumes/{id} \
+     -H "Authorization: Bearer $TOKEN"
+   ```
+
+2. **Export Event:** Export a resume as PDF or DOCX
+3. **Email Verification Event:** Verify an email address
+4. **Password Change Event:** Change your password
 
 ### Verify Delivery
 
@@ -233,9 +302,12 @@ else:
 
 ## Implementation Details
 
-### Files Modified
+### Files Modified/Created
 - `backend/export/router.py` - Added webhook triggers to PDF and DOCX export endpoints
 - `backend/auth/router.py` - Added webhook triggers to email verification and password change endpoints
+- `backend/resumes/router.py` - Created resume CRUD endpoints with webhook triggers (NEW)
+- `backend/resumes/schemas.py` - Created resume API schemas (NEW)
+- `main.py` - Integrated resume router
 
 ### Dependencies Added
 - `WebhookService` from `backend.webhooks.service`
@@ -262,8 +334,11 @@ except Exception as webhook_error:
 
 - **Integration Version:** 1.7.0-phase7
 - **Date:** 2025-12-03
-- **Integrated Events:** 4 event types across 4 endpoints
+- **Integrated Events:** 7 event types across 7 endpoints
   - `export.completed` (PDF and DOCX)
   - `export.failed` (PDF and DOCX)
   - `user.email_verified`
   - `user.password_changed`
+  - `resume.created` (NEW)
+  - `resume.updated` (NEW)
+  - `resume.deleted` (NEW)

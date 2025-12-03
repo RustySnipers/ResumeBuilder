@@ -89,6 +89,9 @@ from backend.middleware.analytics import AnalyticsMiddleware
 # Import Webhook router (Phase 7)
 from backend.webhooks.router import router as webhook_router
 
+# Import Resume router (Phase 7)
+from backend.resumes.router import router as resume_router
+
 import os
 
 # Configure logging
@@ -117,6 +120,9 @@ app.include_router(analytics_router)
 
 # Include Phase 7 webhook router
 app.include_router(webhook_router)
+
+# Include Phase 7 resume router
+app.include_router(resume_router)
 
 # Initialize Rate Limiting (Phase 4)
 REDIS_URL_RATE = os.getenv("REDIS_URL", "redis://localhost:6379")
