@@ -44,6 +44,7 @@ class User(Base):
         analysis_metrics: User's analysis metrics (Phase 6)
         export_metrics: User's export metrics (Phase 6)
         daily_metrics: User's daily aggregated metrics (Phase 6)
+        webhooks: User's configured webhooks (Phase 7)
     """
 
     __tablename__ = "users"
@@ -111,6 +112,11 @@ class User(Base):
     )
     daily_metrics = relationship(
         "DailyMetric", back_populates="user", cascade="all, delete-orphan"
+    )
+
+    # Phase 7: Webhook relationships
+    webhooks = relationship(
+        "Webhook", back_populates="user", cascade="all, delete-orphan"
     )
 
     def __repr__(self) -> str:

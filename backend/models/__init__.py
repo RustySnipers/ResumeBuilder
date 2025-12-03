@@ -24,6 +24,10 @@ from backend.models.analysis_metric import AnalysisMetric
 from backend.models.export_metric import ExportMetric, ExportFormat
 from backend.models.daily_metric import DailyMetric
 
+# Phase 7: Webhook Models
+from backend.models.webhook import Webhook, WebhookEventType
+from backend.models.webhook_event import WebhookEvent, WebhookDeliveryStatus
+
 __all__ = [
     # Core models
     "User",
@@ -46,4 +50,9 @@ __all__ = [
     "ExportMetric",
     "ExportFormat",
     "DailyMetric",
+    # Phase 7: Webhook models
+    "Webhook",
+    "WebhookEventType",
+    "WebhookEvent",
+    "WebhookDeliveryStatus",
 ]
