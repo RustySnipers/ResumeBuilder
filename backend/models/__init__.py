@@ -1,5 +1,5 @@
 """
-Database Models - Phase 2.1
+Database Models - Phase 2.1, Enhanced in Phase 4
 
 This module exports all SQLAlchemy ORM models for the Resume Builder application.
 """
@@ -10,10 +10,49 @@ from backend.models.job_description import JobDescription
 from backend.models.analysis import Analysis
 from backend.models.generated_resume import GeneratedResume
 
+# Phase 4: Authentication & Authorization Models
+from backend.models.role import Role
+from backend.models.user_role import UserRole
+from backend.models.api_key import APIKey
+from backend.models.audit_log import AuditLog
+from backend.models.session import Session
+from backend.models.verification_token import VerificationToken, TokenType
+
+# Phase 6: Analytics Models
+from backend.models.user_activity import UserActivity, ActivityType
+from backend.models.analysis_metric import AnalysisMetric
+from backend.models.export_metric import ExportMetric, ExportFormat
+from backend.models.daily_metric import DailyMetric
+
+# Phase 7: Webhook Models
+from backend.models.webhook import Webhook, WebhookEventType
+from backend.models.webhook_event import WebhookEvent, WebhookDeliveryStatus
+
 __all__ = [
+    # Core models
     "User",
     "Resume",
     "JobDescription",
     "Analysis",
     "GeneratedResume",
+    # Phase 4: Auth models
+    "Role",
+    "UserRole",
+    "APIKey",
+    "AuditLog",
+    "Session",
+    "VerificationToken",
+    "TokenType",
+    # Phase 6: Analytics models
+    "UserActivity",
+    "ActivityType",
+    "AnalysisMetric",
+    "ExportMetric",
+    "ExportFormat",
+    "DailyMetric",
+    # Phase 7: Webhook models
+    "Webhook",
+    "WebhookEventType",
+    "WebhookEvent",
+    "WebhookDeliveryStatus",
 ]

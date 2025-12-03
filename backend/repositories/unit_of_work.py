@@ -12,6 +12,7 @@ from backend.repositories.resume_repository import ResumeRepository
 from backend.repositories.job_description_repository import JobDescriptionRepository
 from backend.repositories.analysis_repository import AnalysisRepository
 from backend.repositories.generated_resume_repository import GeneratedResumeRepository
+from backend.repositories.verification_token_repository import VerificationTokenRepository
 
 
 class UnitOfWork:
@@ -48,6 +49,7 @@ class UnitOfWork:
         self._job_descriptions: Optional[JobDescriptionRepository] = None
         self._analyses: Optional[AnalysisRepository] = None
         self._generated_resumes: Optional[GeneratedResumeRepository] = None
+        self._verification_tokens: Optional[VerificationTokenRepository] = None
 
     @property
     def users(self) -> UserRepository:
@@ -83,6 +85,13 @@ class UnitOfWork:
         if self._generated_resumes is None:
             self._generated_resumes = GeneratedResumeRepository(self.session)
         return self._generated_resumes
+
+    @property
+    def verification_tokens(self) -> VerificationTokenRepository:
+        """Lazy-loaded VerificationTokenRepository."""
+        if self._verification_tokens is None:
+            self._verification_tokens = VerificationTokenRepository(self.session)
+        return self._verification_tokens
 
     async def commit(self) -> None:
         """
