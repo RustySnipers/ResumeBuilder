@@ -5,12 +5,11 @@ FastAPI dependencies for JWT authentication, authorization, and user access.
 """
 
 from typing import Optional, Callable
-from fastapi import Depends, HTTPException, status, Request
+from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, APIKeyHeader
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.auth.security import verify_token, verify_api_key_format
-from backend.auth.schemas import TokenPayload
 from backend.database.session import get_session
 from backend.models.user import User
 from backend.repositories.user_repository import UserRepository

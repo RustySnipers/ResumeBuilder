@@ -8,9 +8,8 @@ rate limiting, and cost tracking.
 import asyncio
 import logging
 from typing import Optional, AsyncGenerator, Dict, Any, List
-from datetime import datetime, timedelta
+from datetime import datetime
 from anthropic import AsyncAnthropic
-from anthropic.types import Message, MessageStreamEvent
 from backend.llm.cost_tracker import CostTracker
 
 logger = logging.getLogger(__name__)

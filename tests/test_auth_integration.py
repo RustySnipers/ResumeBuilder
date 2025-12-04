@@ -8,14 +8,11 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
-from datetime import datetime
 import asyncio
 
 from main import app
 from backend.database.session import get_session
 from backend.database import Base
-from backend.models.user import User
-from backend.models.role import Role
 from backend.repositories.user_repository import UserRepository
 from backend.repositories.role_repository import RoleRepository
 from backend.auth.security import hash_password
@@ -38,7 +35,6 @@ async def async_session():
 
     async with async_session_maker() as session:
         # Create default roles
-        role_repo = RoleRepository(session)
         await session.execute(
             """
             INSERT OR IGNORE INTO roles (id, name, description, permissions, created_at, updated_at)

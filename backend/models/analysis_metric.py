@@ -2,14 +2,20 @@
 
 Stores analysis results over time for trend analysis and success tracking.
 """
+from __future__ import annotations
+
 from datetime import datetime
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 from uuid import UUID, uuid4
 
-from sqlalchemy import DateTime, Float, Integer, String, ForeignKey, Index, JSON
+from sqlalchemy import DateTime, Float, Integer, ForeignKey, Index, JSON
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from backend.models.base import Base
+
+if TYPE_CHECKING:
+    from backend.models.analysis import Analysis
+    from backend.models.user import User
 
 
 class AnalysisMetric(Base):

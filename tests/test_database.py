@@ -8,8 +8,6 @@ Tests for:
 """
 
 import pytest
-from sqlalchemy import select
-from datetime import datetime
 import uuid
 
 # Import models

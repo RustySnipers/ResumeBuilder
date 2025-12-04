@@ -9,12 +9,10 @@ This module provides advanced keyword extraction capabilities including:
 """
 
 from sklearn.feature_extraction.text import TfidfVectorizer
-import nltk
 from nltk.stem import WordNetLemmatizer
 from nltk.corpus import stopwords
 import re
-from typing import List, Dict, Tuple
-from collections import Counter
+from typing import List, Tuple
 import logging
 
 logger = logging.getLogger(__name__)

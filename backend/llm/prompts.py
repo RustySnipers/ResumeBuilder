@@ -4,7 +4,7 @@ Prompt Templates - Phase 3.1
 Engineered prompts for resume optimization using Claude.
 """
 
-from typing import Dict, List, Optional
+from typing import List
 
 
 class PromptTemplates:

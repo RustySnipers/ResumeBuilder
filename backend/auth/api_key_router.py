@@ -4,10 +4,9 @@ API Key Management Router - Phase 4
 FastAPI router for API key CRUD operations.
 """
 
-from typing import List, Optional
+from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from datetime import datetime
 import logging
 
 from backend.auth.schemas import (
@@ -22,9 +21,7 @@ from backend.database.session import get_session
 from backend.repositories.api_key_repository import APIKeyRepository
 from backend.repositories.audit_log_repository import AuditLogRepository
 from backend.models.user import User
-from backend.models.api_key import APIKey
 import uuid
-import hashlib
 
 logger = logging.getLogger(__name__)
 

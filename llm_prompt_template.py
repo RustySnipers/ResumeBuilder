@@ -146,7 +146,6 @@ def construct_resume_tailoring_prompt(
 if __name__ == "__main__":
     # Example demonstrating how this will be used in Phase 3
     from main import GapAnalysisResult
-    import json
 
     # Simulated data (in production, this comes from the API)
     example_jd_redacted = """

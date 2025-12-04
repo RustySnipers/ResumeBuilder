@@ -2,15 +2,21 @@
 
 Allows users to subscribe to events and receive HTTP callbacks.
 """
+from __future__ import annotations
+
 from datetime import datetime
 from enum import Enum
-from typing import Optional, List
+from typing import Optional, List, TYPE_CHECKING
 from uuid import UUID, uuid4
 
-from sqlalchemy import DateTime, String, Boolean, Enum as SQLEnum, ForeignKey, Index, JSON, Text
+from sqlalchemy import DateTime, String, Boolean, ForeignKey, Index, JSON
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from backend.models.base import Base
+
+if TYPE_CHECKING:
+    from backend.models.user import User
+    from backend.models.webhook_event import WebhookEvent
 
 
 class WebhookEventType(str, Enum):

@@ -51,8 +51,6 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from typing import List
-import re
-from collections import Counter
 import logging
 import json
 
@@ -73,8 +71,9 @@ from backend.llm.retry_logic import RetryConfig, retry_with_exponential_backoff
 from backend.auth.router import router as auth_router
 from backend.auth.api_key_router import router as api_key_router
 
-# Import middleware (Phase 4)
-from backend.middleware.rate_limit import RateLimitMiddleware
+# Optional middleware (uncomment imports below if enabling)
+# from backend.middleware.rate_limit import RateLimitMiddleware
+# from backend.middleware.analytics import AnalyticsMiddleware
 from backend.auth.rate_limiter import UserRateLimiter
 
 # Import Export router (Phase 5)
@@ -82,9 +81,6 @@ from backend.export.router import router as export_router
 
 # Import Analytics router (Phase 6)
 from backend.analytics.router import router as analytics_router
-
-# Import Analytics middleware (Phase 6)
-from backend.middleware.analytics import AnalyticsMiddleware
 
 # Import Webhook router (Phase 7)
 from backend.webhooks.router import router as webhook_router
@@ -320,10 +316,7 @@ def enhanced_gap_analysis(resume: str, job_description: str) -> GapAnalysisResul
         [job_description, resume], top_n=30
     )
 
-    # 4. Extract industry-specific keywords
-    tech_keywords = keyword_extractor.extract_industry_keywords(job_description, 'tech')
-
-    # 5. Check which JD keywords are missing from resume
+    # 4. Check which JD keywords are missing from resume
     jd_keywords = [kw[0] for kw in tfidf_keywords[:20]]  # Top 20 from JD
     resume_lower = resume.lower()
     missing_keywords = [kw for kw in jd_keywords if kw not in resume_lower]

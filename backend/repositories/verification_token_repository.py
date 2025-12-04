@@ -56,7 +56,7 @@ class VerificationTokenRepository(BaseRepository[VerificationToken]):
                 and_(
                     VerificationToken.token == token,
                     VerificationToken.token_type == token_type,
-                    VerificationToken.used == False,
+                    VerificationToken.used.is_(False),
                     VerificationToken.expires_at > datetime.utcnow()
                 )
             )
@@ -86,7 +86,7 @@ class VerificationTokenRepository(BaseRepository[VerificationToken]):
             conditions.append(VerificationToken.token_type == token_type)
 
         if not include_used:
-            conditions.append(VerificationToken.used == False)
+            conditions.append(VerificationToken.used.is_(False))
 
         result = await self.session.execute(
             select(VerificationToken)
@@ -116,7 +116,7 @@ class VerificationTokenRepository(BaseRepository[VerificationToken]):
                 and_(
                     VerificationToken.user_id == user_id,
                     VerificationToken.token_type == token_type,
-                    VerificationToken.used == False,
+                    VerificationToken.used.is_(False),
                     VerificationToken.expires_at > datetime.utcnow()
                 )
             )

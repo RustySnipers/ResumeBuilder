@@ -7,7 +7,6 @@ Data access layer for role operations.
 from typing import Optional, List
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from sqlalchemy.orm import selectinload
 import uuid
 
 from backend.repositories.base_repository import BaseRepository

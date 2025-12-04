@@ -5,7 +5,7 @@ Pydantic schemas for webhook API endpoints.
 from datetime import datetime
 from typing import List, Optional, Dict, Any
 from uuid import UUID
-from pydantic import BaseModel, Field, HttpUrl
+from pydantic import BaseModel, Field
 
 
 class WebhookCreate(BaseModel):

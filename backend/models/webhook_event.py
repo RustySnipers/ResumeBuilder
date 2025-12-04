@@ -2,16 +2,21 @@
 
 Tracks webhook delivery attempts and their results.
 """
+from __future__ import annotations
+
 from datetime import datetime
 from enum import Enum
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 from uuid import UUID, uuid4
 
-from sqlalchemy import DateTime, String, Integer, Enum as SQLEnum, ForeignKey, Index, JSON, Text, Boolean
+from sqlalchemy import DateTime, Integer, Enum as SQLEnum, ForeignKey, Index, JSON, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from backend.models.base import Base
 from backend.models.webhook import WebhookEventType
+
+if TYPE_CHECKING:
+    from backend.models.webhook import Webhook
 
 
 class WebhookDeliveryStatus(str, Enum):

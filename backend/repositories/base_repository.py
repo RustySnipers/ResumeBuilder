@@ -4,9 +4,9 @@ Base Repository Pattern - Phase 2.3
 Provides generic CRUD operations for all repositories using async SQLAlchemy.
 """
 
-from typing import TypeVar, Generic, Type, Optional, List, Any
+from typing import TypeVar, Generic, Type, Optional, List
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, delete, update
+from sqlalchemy import select, delete
 from backend.database import Base
 import uuid
 

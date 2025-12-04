@@ -2,7 +2,7 @@
 
 Pydantic schemas for analytics API endpoints.
 """
-from typing import Dict, List, Optional
+from typing import Dict, List
 from uuid import UUID
 from pydantic import BaseModel, Field
 

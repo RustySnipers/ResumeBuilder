@@ -5,7 +5,6 @@ Business logic for webhook management and event delivery.
 import hmac
 import hashlib
 import secrets
-import asyncio
 import time
 from datetime import datetime, timedelta
 from typing import List, Optional, Dict, Any
@@ -15,7 +14,7 @@ import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.models.webhook import Webhook, WebhookEventType
-from backend.models.webhook_event import WebhookEvent, WebhookDeliveryStatus
+from backend.models.webhook_event import WebhookEvent
 from backend.repositories.webhook_repository import WebhookRepository
 from backend.repositories.webhook_event_repository import WebhookEventRepository
 
@@ -341,7 +340,7 @@ class WebhookService:
                 # Consider 2xx status codes as success
                 success = 200 <= http_status < 300
 
-        except httpx.TimeoutException as e:
+        except httpx.TimeoutException:
             error_message = f"Timeout after {webhook.timeout_seconds}s"
         except httpx.RequestError as e:
             error_message = f"Request error: {str(e)}"

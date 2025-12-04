@@ -2,7 +2,7 @@
 
 Handles data access for aggregated daily analytics.
 """
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta
 from typing import List, Optional, Dict
 from uuid import UUID
 

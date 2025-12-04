@@ -2,15 +2,20 @@
 
 Tracks export operations for analytics and optimization.
 """
+from __future__ import annotations
+
 from datetime import datetime
 from enum import Enum
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 from uuid import UUID, uuid4
 
-from sqlalchemy import DateTime, Integer, String, Float, Enum as SQLEnum, ForeignKey, Index, Boolean
+from sqlalchemy import DateTime, Integer, String, Enum as SQLEnum, ForeignKey, Index, Boolean
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from backend.models.base import Base
+
+if TYPE_CHECKING:
+    from backend.models.user import User
 
 
 class ExportFormat(str, Enum):

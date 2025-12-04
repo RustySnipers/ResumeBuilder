@@ -2,7 +2,7 @@
 
 Main service for collecting and aggregating analytics data.
 """
-from datetime import date, datetime, timedelta
+from datetime import datetime, timedelta
 from typing import Optional, Dict, List
 from uuid import UUID
 

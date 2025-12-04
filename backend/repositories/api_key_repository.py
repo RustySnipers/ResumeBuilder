@@ -70,7 +70,7 @@ class APIKeyRepository(BaseRepository[APIKey]):
         query = select(APIKey).where(APIKey.user_id == user_id)
 
         if active_only:
-            query = query.where(APIKey.is_active == True)
+            query = query.where(APIKey.is_active.is_(True))
 
         result = await self.session.execute(query)
         return list(result.scalars().all())

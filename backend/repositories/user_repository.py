@@ -60,7 +60,7 @@ class UserRepository(BaseRepository[User]):
         """
         result = await self.session.execute(
             select(User)
-            .where(User.is_active == True)
+            .where(User.is_active.is_(True))
             .limit(limit)
             .offset(offset)
         )

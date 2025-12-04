@@ -2,14 +2,19 @@
 
 Stores pre-aggregated daily statistics for fast dashboard queries.
 """
+from __future__ import annotations
+
 from datetime import datetime, date
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 from uuid import UUID, uuid4
 
-from sqlalchemy import DateTime, Date, Integer, Float, String, ForeignKey, Index, JSON
+from sqlalchemy import DateTime, Date, Integer, Float, ForeignKey, Index, JSON
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from backend.models.base import Base
+
+if TYPE_CHECKING:
+    from backend.models.user import User
 
 
 class DailyMetric(Base):
