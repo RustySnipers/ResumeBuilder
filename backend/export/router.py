@@ -22,6 +22,8 @@ from backend.database.session import get_session
 from backend.repositories.resume_repository import ResumeRepository
 from backend.repositories.audit_log_repository import AuditLogRepository
 from backend.models.user import User
+from backend.models.webhook import WebhookEventType
+from backend.webhooks.service import WebhookService
 import uuid
 
 logger = logging.getLogger(__name__)
@@ -178,6 +180,27 @@ async def export_pdf(
 
         logger.info(f"Exported resume {resume.id} as PDF for user {current_user.email} ({len(pdf_bytes)} bytes)")
 
+        # Trigger webhook event for successful export
+        try:
+            webhook_service = WebhookService(session)
+            await webhook_service.trigger_event(
+                event_type=WebhookEventType.EXPORT_COMPLETED,
+                event_id=resume.id,
+                payload={
+                    "resume_id": str(resume.id),
+                    "user_id": str(current_user.id),
+                    "format": "pdf",
+                    "template": export_request.template,
+                    "size_bytes": len(pdf_bytes),
+                    "title": resume.title,
+                },
+                user_id=current_user.id,
+            )
+            await session.commit()
+        except Exception as webhook_error:
+            # Log webhook error but don't fail the export
+            logger.error(f"Failed to trigger webhook for export: {webhook_error}")
+
         # Return PDF file
         filename = f"resume_{resume.title.replace(' ', '_')}.pdf"
         return Response(
@@ -194,6 +217,28 @@ async def export_pdf(
 
     except Exception as e:
         logger.error(f"PDF generation failed: {e}")
+
+        # Trigger webhook event for failed export
+        try:
+            webhook_service = WebhookService(session)
+            await webhook_service.trigger_event(
+                event_type=WebhookEventType.EXPORT_FAILED,
+                event_id=resume.id,
+                payload={
+                    "resume_id": str(resume.id),
+                    "user_id": str(current_user.id),
+                    "format": "pdf",
+                    "template": export_request.template,
+                    "error": str(e),
+                    "title": resume.title,
+                },
+                user_id=current_user.id,
+            )
+            await session.commit()
+        except Exception as webhook_error:
+            # Log webhook error but don't mask the original error
+            logger.error(f"Failed to trigger webhook for export failure: {webhook_error}")
+
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"PDF generation failed: {str(e)}",
@@ -317,6 +362,27 @@ async def export_docx(
 
         logger.info(f"Exported resume {resume.id} as DOCX for user {current_user.email} ({len(docx_bytes)} bytes)")
 
+        # Trigger webhook event for successful export
+        try:
+            webhook_service = WebhookService(session)
+            await webhook_service.trigger_event(
+                event_type=WebhookEventType.EXPORT_COMPLETED,
+                event_id=resume.id,
+                payload={
+                    "resume_id": str(resume.id),
+                    "user_id": str(current_user.id),
+                    "format": "docx",
+                    "template": export_request.template,
+                    "size_bytes": len(docx_bytes),
+                    "title": resume.title,
+                },
+                user_id=current_user.id,
+            )
+            await session.commit()
+        except Exception as webhook_error:
+            # Log webhook error but don't fail the export
+            logger.error(f"Failed to trigger webhook for export: {webhook_error}")
+
         # Return DOCX file
         filename = f"resume_{resume.title.replace(' ', '_')}.docx"
         return Response(
@@ -333,6 +399,28 @@ async def export_docx(
 
     except Exception as e:
         logger.error(f"DOCX generation failed: {e}")
+
+        # Trigger webhook event for failed export
+        try:
+            webhook_service = WebhookService(session)
+            await webhook_service.trigger_event(
+                event_type=WebhookEventType.EXPORT_FAILED,
+                event_id=resume.id,
+                payload={
+                    "resume_id": str(resume.id),
+                    "user_id": str(current_user.id),
+                    "format": "docx",
+                    "template": export_request.template,
+                    "error": str(e),
+                    "title": resume.title,
+                },
+                user_id=current_user.id,
+            )
+            await session.commit()
+        except Exception as webhook_error:
+            # Log webhook error but don't mask the original error
+            logger.error(f"Failed to trigger webhook for export failure: {webhook_error}")
+
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"DOCX generation failed: {str(e)}",
