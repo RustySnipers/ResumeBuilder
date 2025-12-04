@@ -10,19 +10,69 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      # Core Configuration
+      - ENV=${ENV:-production}
+      - DEBUG=${DEBUG:-False}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+
+      # Security
+      - SECRET_KEY=${SECRET_KEY}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+
+      # Database
       - DATABASE_URL=postgresql+asyncpg://postgres:postgres@db:5432/resumebuilder
+      - DB_POOL_SIZE=${DB_POOL_SIZE:-20}
+      - DB_MAX_OVERFLOW=${DB_MAX_OVERFLOW:-10}
+
+      # Redis
       - REDIS_URL=redis://redis:6379
+      - CACHE_TTL_SECONDS=${CACHE_TTL_SECONDS:-3600}
+      - EXPORT_CACHE_TTL=${EXPORT_CACHE_TTL:-900}
+
+      # Anthropic API
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - DEFAULT_MODEL=${DEFAULT_MODEL:-claude-sonnet-4-20250514}
+      - MAX_TOKENS=${MAX_TOKENS:-4096}
+      - TEMPERATURE=${TEMPERATURE:-1.0}
+
+      # Rate Limiting
+      - RATE_LIMIT_PER_MINUTE=${RATE_LIMIT_PER_MINUTE:-100}
+      - RATE_LIMIT_PER_HOUR=${RATE_LIMIT_PER_HOUR:-1000}
+      - RATE_LIMIT_PER_DAY=${RATE_LIMIT_PER_DAY:-5000}
+      - EXPORTS_PER_MINUTE=${EXPORTS_PER_MINUTE:-10}
+      - EXPORTS_PER_DAY=${EXPORTS_PER_DAY:-50}
+
+      # Email Configuration
+      - EMAIL_PROVIDER=${EMAIL_PROVIDER:-console}
+      - SMTP_HOST=${SMTP_HOST:-}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USER=${SMTP_USER:-}
+      - SMTP_PASSWORD=${SMTP_PASSWORD:-}
+      - SMTP_USE_TLS=${SMTP_USE_TLS:-true}
+      - SMTP_FROM=${SMTP_FROM:-noreply@resumebuilder.local}
+      - SMTP_FROM_NAME=${SMTP_FROM_NAME:-ResumeBuilder}
+
+      # Application
+      - APP_BASE_URL=${APP_BASE_URL:-http://localhost:8000}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:3000}
+
+      # Feature Flags
+      - ENABLE_REGISTRATION=${ENABLE_REGISTRATION:-True}
+      - ENABLE_ANALYTICS=${ENABLE_ANALYTICS:-True}
+      - ENABLE_RATE_LIMITING=${ENABLE_RATE_LIMITING:-True}
+      - ENABLE_CACHING=${ENABLE_CACHING:-True}
     depends_on:
-      - db
-      - redis
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     volumes:
       - ./:/app
     networks:
       - resumebuilder-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -66,6 +116,38 @@ services:
       timeout: 5s
       retries: 5
     command: redis-server --appendonly yes
+
+  # Webhook Worker (Phase 7)
+  webhook-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: resumebuilder-webhook-worker
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@db:5432/resumebuilder
+      - WEBHOOK_PENDING_BATCH_SIZE=${WEBHOOK_PENDING_BATCH_SIZE:-100}
+      - WEBHOOK_RETRY_BATCH_SIZE=${WEBHOOK_RETRY_BATCH_SIZE:-100}
+      - WEBHOOK_SLEEP_SECONDS=${WEBHOOK_SLEEP_SECONDS:-10}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    volumes:
+      - ./:/app
+    networks:
+      - resumebuilder-network
+    restart: unless-stopped
+    command: python scripts/run_webhook_worker.py
+    healthcheck:
+      test: ["CMD-SHELL", "ps aux | grep -v grep | grep run_webhook_worker.py || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
 
 volumes:
   postgres_data:
