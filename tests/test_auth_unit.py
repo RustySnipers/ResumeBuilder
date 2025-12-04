@@ -5,7 +5,7 @@ Tests for core authentication utilities (password hashing, JWT tokens, API keys)
 """
 
 import pytest
-from datetime import datetime, timedelta
+from datetime import timedelta
 from backend.auth.security import (
     hash_password,
     verify_password,

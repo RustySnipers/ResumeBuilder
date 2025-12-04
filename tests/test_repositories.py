@@ -13,14 +13,12 @@ Tests cover:
 
 import pytest
 import uuid
-from datetime import datetime, timedelta
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from backend.database import Base
 from backend.models.user import User
 from backend.models.resume import Resume
 from backend.models.job_description import JobDescription
 from backend.models.analysis import Analysis
-from backend.models.generated_resume import GeneratedResume
 from backend.repositories.user_repository import UserRepository
 from backend.repositories.resume_repository import ResumeRepository
 from backend.repositories.job_description_repository import JobDescriptionRepository
@@ -530,7 +528,7 @@ class TestUnitOfWork:
 
         try:
             # Create user
-            user = await uow.users.create(
+            await uow.users.create(
                 email="rollback@example.com",
                 hashed_password="hashed_password",
                 is_active=True,
@@ -550,13 +548,12 @@ class TestUnitOfWork:
 
         # User should not exist due to rollback
         user_check = await uow.users.get_by_email("rollback@example.com")
-        # Depending on DB behavior, this might be None or still exist
-        # SQLite in-memory might behave differently than PostgreSQL
+        assert user_check is None
 
     async def test_uow_context_manager(self, async_session):
         """Test using UnitOfWork as context manager."""
         async with UnitOfWork(async_session) as uow:
-            user = await uow.users.create(
+            await uow.users.create(
                 email="context@example.com",
                 hashed_password="hashed_password",
                 is_active=True,

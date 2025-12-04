@@ -4,7 +4,6 @@ Authentication Router - Phase 4
 FastAPI router with authentication endpoints.
 """
 
-from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -22,7 +21,6 @@ from backend.auth.security import (
     REFRESH_TOKEN_EXPIRE_DAYS,
 )
 from backend.auth.dependencies import (
-    get_current_user,
     get_current_active_user,
     check_account_lockout,
     handle_failed_login,
@@ -82,7 +80,6 @@ async def register_user(
     user_repo = UserRepository(session)
     role_repo = RoleRepository(session)
     audit_repo = AuditLogRepository(session)
-    token_repo = VerificationTokenRepository(session)
 
     # Check if email already exists
     existing_user = await user_repo.get_by_email(user_data.email)

@@ -39,7 +39,7 @@ class WebhookRepository(BaseRepository[Webhook]):
         stmt = select(Webhook).where(Webhook.user_id == user_id)
 
         if active_only:
-            stmt = stmt.where(Webhook.is_active == True)
+            stmt = stmt.where(Webhook.is_active.is_(True))
 
         stmt = stmt.order_by(Webhook.created_at.desc())
 
@@ -83,7 +83,7 @@ class WebhookRepository(BaseRepository[Webhook]):
             List of active Webhook objects
         """
         # Query all active webhooks
-        stmt = select(Webhook).where(Webhook.is_active == True)
+        stmt = select(Webhook).where(Webhook.is_active.is_(True))
         result = await self.session.execute(stmt)
         webhooks = list(result.scalars().all())
 
@@ -112,7 +112,7 @@ class WebhookRepository(BaseRepository[Webhook]):
         stmt = select(Webhook).where(
             and_(
                 Webhook.user_id == user_id,
-                Webhook.is_active == True,
+                Webhook.is_active.is_(True),
             )
         )
 

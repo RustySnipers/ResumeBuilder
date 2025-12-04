@@ -2,7 +2,6 @@
 
 API endpoints for webhook management.
 """
-from typing import List
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query
@@ -18,7 +17,6 @@ from backend.webhooks.schemas import (
     WebhookUpdate,
     WebhookResponse,
     WebhookListResponse,
-    WebhookEventResponse,
     WebhookEventListResponse,
     WebhookStatisticsResponse,
     WebhookSecretResponse,

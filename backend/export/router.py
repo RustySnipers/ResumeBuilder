@@ -7,7 +7,6 @@ FastAPI endpoints for resume export functionality with rate limiting and caching
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
-from typing import Optional
 from pydantic import BaseModel, Field
 import logging
 import os

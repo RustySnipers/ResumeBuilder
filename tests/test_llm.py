@@ -11,9 +11,9 @@ Tests cover:
 
 import pytest
 import asyncio
-from unittest.mock import AsyncMock, Mock, patch, MagicMock
+from unittest.mock import AsyncMock, Mock, patch
 from backend.llm.claude_client import ClaudeClient, RateLimiter
-from backend.llm.cost_tracker import CostTracker, RequestRecord
+from backend.llm.cost_tracker import CostTracker
 from backend.llm.prompts import PromptTemplates
 from datetime import datetime
 

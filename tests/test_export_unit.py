@@ -187,7 +187,7 @@ class TestPDFGenerator:
 
         generator = PDFGenerator()
         start_time = time.time()
-        pdf_bytes = generator.generate(SAMPLE_RESUME_DATA, template="professional")
+        generator.generate(SAMPLE_RESUME_DATA, template="professional")
         end_time = time.time()
 
         generation_time = end_time - start_time
@@ -299,7 +299,7 @@ class TestDOCXGenerator:
 
         generator = DOCXGenerator()
         start_time = time.time()
-        docx_bytes = generator.generate(SAMPLE_RESUME_DATA, template="professional")
+        generator.generate(SAMPLE_RESUME_DATA, template="professional")
         end_time = time.time()
 
         generation_time = end_time - start_time
@@ -415,7 +415,7 @@ class TestTemplateEngine:
 
         engine = TemplateEngine()
         start_time = time.time()
-        html = engine.render("professional", SAMPLE_RESUME_DATA)
+        engine.render("professional", SAMPLE_RESUME_DATA)
         end_time = time.time()
 
         render_time = end_time - start_time

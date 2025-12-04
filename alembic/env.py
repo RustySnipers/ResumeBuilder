@@ -10,7 +10,6 @@ from alembic import context
 
 # Import Base and all models for autogenerate support
 from backend.database import Base
-from backend.models import User, Resume, JobDescription, Analysis, GeneratedResume
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

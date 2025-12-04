@@ -7,7 +7,6 @@ This module provides resume section parsing capabilities including:
 - Keyword stuffing detection
 """
 
-import re
 from typing import Dict, List
 from collections import Counter
 import logging

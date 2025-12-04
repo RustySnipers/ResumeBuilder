@@ -5,7 +5,6 @@ Rate limiting specifically for export endpoints to prevent abuse.
 """
 
 import time
-from typing import Optional
 from redis import Redis
 from fastapi import HTTPException, status
 import logging

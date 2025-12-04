@@ -10,7 +10,6 @@ from typing import Callable
 import logging
 
 from backend.auth.rate_limiter import UserRateLimiter
-from backend.auth.dependencies import get_optional_user
 from backend.database.session import get_session
 
 logger = logging.getLogger(__name__)

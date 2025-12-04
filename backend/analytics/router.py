@@ -2,8 +2,6 @@
 
 API endpoints for analytics and dashboard data.
 """
-from typing import Optional
-from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession

@@ -4,7 +4,7 @@ Resume Repository - Phase 2.3
 Handles resume-specific database operations.
 """
 
-from typing import List, Optional
+from typing import List
 import uuid
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func

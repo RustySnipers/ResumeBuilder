@@ -211,7 +211,7 @@ class TestSectionParser:
         stuffed_text = "Python " * 20 + "developer"
         stuffed = parser.detect_keyword_stuffing(stuffed_text, threshold=0.05)
         assert 'python' in stuffed
-        assert stuffed['python'] == True
+        assert stuffed['python']
 
     def test_no_keyword_stuffing_normal_text(self):
         parser = SectionParser()

@@ -6,8 +6,7 @@ Generate professional DOCX resumes compatible with Microsoft Word.
 
 from docx import Document
 from docx.shared import Inches, Pt, RGBColor
-from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_LINE_SPACING
-from docx.enum.style import WD_STYLE_TYPE
+from docx.enum.text import WD_ALIGN_PARAGRAPH
 from typing import Dict, Any, List, Optional
 from io import BytesIO
 import logging
@@ -171,10 +170,10 @@ class DOCXGenerator:
     def _build_summary(self, summary: str):
         """Build professional summary section."""
         # Section header
-        header = self.doc.add_paragraph("PROFESSIONAL SUMMARY", style='Heading 2')
+        self.doc.add_paragraph("PROFESSIONAL SUMMARY", style='Heading 2')
 
         # Summary text
-        para = self.doc.add_paragraph(summary)
+        self.doc.add_paragraph(summary)
 
     def _build_experience(self, experience: List[Dict[str, Any]]):
         """Build work experience section."""
@@ -184,7 +183,7 @@ class DOCXGenerator:
         for job in experience:
             # Job title
             if "title" in job:
-                title_para = self.doc.add_paragraph(job["title"], style='Heading 3')
+                self.doc.add_paragraph(job["title"], style='Heading 3')
 
             # Company and location
             company_parts = []
@@ -218,14 +217,12 @@ class DOCXGenerator:
 
             # Description
             if "description" in job and job["description"]:
-                desc_para = self.doc.add_paragraph(job["description"])
+                self.doc.add_paragraph(job["description"])
 
             # Achievements/bullets
             if "achievements" in job and job["achievements"]:
                 for achievement in job["achievements"]:
-                    bullet_para = self.doc.add_paragraph(
-                        achievement, style='List Bullet'
-                    )
+                    self.doc.add_paragraph(achievement, style='List Bullet')
 
             # Add spacing between jobs
             self._add_spacing(0.1)
@@ -238,7 +235,7 @@ class DOCXGenerator:
         for edu in education:
             # Degree
             if "degree" in edu:
-                degree_para = self.doc.add_paragraph(edu["degree"], style='Heading 3')
+                self.doc.add_paragraph(edu["degree"], style='Heading 3')
 
             # Institution
             if "institution" in edu:
@@ -264,12 +261,12 @@ class DOCXGenerator:
 
             # GPA
             if "gpa" in edu:
-                gpa_para = self.doc.add_paragraph(f"GPA: {edu['gpa']}")
+                self.doc.add_paragraph(f"GPA: {edu['gpa']}")
 
             # Honors/Awards
             if "honors" in edu and edu["honors"]:
                 for honor in edu["honors"]:
-                    honor_para = self.doc.add_paragraph(honor, style='List Bullet')
+                    self.doc.add_paragraph(honor, style='List Bullet')
 
             # Add spacing between education entries
             self._add_spacing(0.1)
@@ -291,7 +288,7 @@ class DOCXGenerator:
         for cert in certifications:
             # Certificate name
             if "name" in cert:
-                cert_para = self.doc.add_paragraph(cert["name"], style='Heading 3')
+                self.doc.add_paragraph(cert["name"], style='Heading 3')
 
             # Issuer
             if "issuer" in cert:
@@ -310,9 +307,7 @@ class DOCXGenerator:
 
             # Credential ID
             if "credential_id" in cert:
-                cred_para = self.doc.add_paragraph(
-                    f"Credential ID: {cert['credential_id']}"
-                )
+                self.doc.add_paragraph(f"Credential ID: {cert['credential_id']}")
 
             # Add spacing between certifications
             self._add_spacing(0.1)
@@ -325,11 +320,11 @@ class DOCXGenerator:
         for project in projects:
             # Project name
             if "name" in project:
-                proj_para = self.doc.add_paragraph(project["name"], style='Heading 3')
+                self.doc.add_paragraph(project["name"], style='Heading 3')
 
             # Description
             if "description" in project:
-                desc_para = self.doc.add_paragraph(project["description"])
+                self.doc.add_paragraph(project["description"])
 
             # Technologies
             if "technologies" in project:
@@ -340,7 +335,7 @@ class DOCXGenerator:
 
             # URL
             if "url" in project:
-                url_para = self.doc.add_paragraph(f"URL: {project['url']}")
+                self.doc.add_paragraph(f"URL: {project['url']}")
 
             # Add spacing between projects
             self._add_spacing(0.1)

@@ -148,13 +148,13 @@ class ExportMetricRepository(BaseRepository[ExportMetric]):
             ).label('cached_exports'),
             func.avg(
                 func.case(
-                    (ExportMetric.cached == True, ExportMetric.generation_time_ms),
+                    (ExportMetric.cached.is_(True), ExportMetric.generation_time_ms),
                     else_=None
                 )
             ).label('avg_cached_time'),
             func.avg(
                 func.case(
-                    (ExportMetric.cached == False, ExportMetric.generation_time_ms),
+                    (ExportMetric.cached.is_(False), ExportMetric.generation_time_ms),
                     else_=None
                 )
             ).label('avg_uncached_time'),

@@ -7,7 +7,7 @@ Tracks LLM API usage and costs for budget management.
 import logging
 from typing import Dict, Any, List
 from datetime import datetime
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
 

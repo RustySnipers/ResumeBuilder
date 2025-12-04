@@ -7,7 +7,7 @@ Data access layer for session (refresh token) operations.
 from typing import Optional, List
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete
-from datetime import datetime, timedelta
+from datetime import datetime
 import uuid
 
 from backend.repositories.base_repository import BaseRepository

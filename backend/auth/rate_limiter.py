@@ -5,9 +5,8 @@ Redis-based rate limiting with role-based quotas.
 """
 
 from typing import Optional, Dict, Any
-from datetime import datetime, timedelta
+from datetime import datetime
 import redis.asyncio as redis
-import json
 import logging
 
 logger = logging.getLogger(__name__)

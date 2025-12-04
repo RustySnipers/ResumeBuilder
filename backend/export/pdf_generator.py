@@ -4,22 +4,16 @@ PDF Generator - Phase 5
 Generate professional PDF resumes using ReportLab.
 """
 
-from reportlab.lib.pagesizes import letter, A4
+from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
-from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_RIGHT, TA_JUSTIFY
+from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY
 from reportlab.lib import colors
 from reportlab.platypus import (
     SimpleDocTemplate,
     Paragraph,
     Spacer,
-    Table,
-    TableStyle,
-    PageBreak,
-    KeepTogether,
 )
-from reportlab.pdfgen import canvas
-from datetime import datetime
 from typing import Dict, Any, List, Optional
 from io import BytesIO
 import logging

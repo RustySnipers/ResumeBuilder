@@ -5,7 +5,6 @@ FastAPI endpoints for resume CRUD operations with webhook triggers.
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from typing import List
 from uuid import UUID
 from datetime import datetime
 import logging
