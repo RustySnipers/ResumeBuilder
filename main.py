@@ -64,6 +64,7 @@ from backend.llm.prompts import PromptTemplates
 from backend.llm.response_validator import ResponseValidator
 from backend.llm.cache import LLMCache
 from backend.llm.retry_logic import RetryConfig, retry_with_exponential_backoff
+from backend.llm.stub_claude_client import StubClaudeClient
 
 # Import Auth routers (Phase 4)
 from backend.auth.router import router as auth_router
@@ -213,12 +214,16 @@ def get_claude_client():
         return claude_client
 
     if LITE_MODE:
-        logger.warning("Lite mode enabled - external Claude client will not be initialized")
-        return None
+        logger.info("Lite mode enabled - using stub Claude client")
+        claude_client = StubClaudeClient()
+        return claude_client
 
     if not ANTHROPIC_API_KEY:
-        logger.warning("ANTHROPIC_API_KEY not configured - LLM endpoints will fast-fail")
-        return None
+        logger.warning(
+            "ANTHROPIC_API_KEY not configured - falling back to stub Claude client"
+        )
+        claude_client = StubClaudeClient()
+        return claude_client
 
     claude_client = ClaudeClient(
         api_key=ANTHROPIC_API_KEY,
@@ -590,7 +595,7 @@ async def health_check():
     client = get_claude_client()
     if client:
         health_status["services"]["llm"] = {
-            "status": "healthy" if not LITE_MODE else "stub",
+            "status": "stub" if getattr(client, "is_stub", False) else "healthy",
             "model": client.model
         }
     else:

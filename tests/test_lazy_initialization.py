@@ -136,12 +136,28 @@ class TestLazyInitialization:
         assert main.llm_cache is None
         assert main.claude_client is None
 
-    def test_lite_mode_fast_fails_llm_endpoints(self, monkeypatch: pytest.MonkeyPatch):
+        sys.modules.pop("main", None)
+
+    def test_lite_mode_uses_stub_client(self, monkeypatch: pytest.MonkeyPatch):
         main = reload_main(monkeypatch, lite_mode=True, api_key=None)
+
+        monkeypatch.setattr(main, "redact_pii", lambda text: text)
+
+        def _stub_gap(resume: str, job_description: str):
+            return main.GapAnalysisResult(
+                missing_keywords=[],
+                suggestions=[],
+                match_score=0.0,
+                semantic_similarity=0.0,
+            )
+
+        monkeypatch.setattr(main, "enhanced_gap_analysis", _stub_gap)
 
         with TestClient(main.app) as client:
             response = client.post("/api/v1/generate", json=PAYLOAD)
 
-        assert response.status_code == 503
-        assert main.claude_client is None
-        assert main.llm_cache is None
+        assert response.status_code == 200
+        assert main.claude_client is not None
+        assert getattr(main.claude_client, "is_stub", False) is True
+
+        sys.modules.pop("main", None)
