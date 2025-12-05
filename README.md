@@ -53,6 +53,15 @@ A secure FastAPI backend for generating ATS-friendly resumes with mandatory PII 
    - Docs: http://localhost:8000/docs
    - Health checks: `/`, `/health`, `/health/ready`, `/health/live`
 
+## Lite Mode (offline/desktop)
+- Enable with `LITE_MODE=true` in your environment before starting the app.
+- What changes:
+  - In-memory caches replace Redis for both general caching and LLM responses.
+  - A SQLite database file in a temporary directory replaces PostgreSQL (override with `DATABASE_URL` if you prefer a fixed SQLite file).
+  - A stub Claude client returns a canned local response when `ANTHROPIC_API_KEY` is absent, keeping generation endpoints usable offline.
+  - Analytics, export, webhook routing, and Redis-backed rate limiting are skipped to avoid missing dependency/import errors.
+- Intended use cases: air-gapped development, quick desktop demos, and CI smoke tests without external services.
+
 ## Development & Quality Gates
 - Linting/unused code: `ruff check`
 - Syntax smoke test: `python -m compileall backend main.py`

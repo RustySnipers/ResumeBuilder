@@ -10,15 +10,24 @@ Features:
 - JSON serialization for complex objects
 """
 
-import redis.asyncio as aioredis
 import json
 import os
-from typing import Optional, Any
+import time
+from typing import Optional, Any, Dict
+import fnmatch
 
+from backend.config import is_lite_mode
 
 # ============================================================================
 # Redis Configuration
 # ============================================================================
+
+LITE_MODE = is_lite_mode()
+
+if not LITE_MODE:
+    import redis.asyncio as aioredis
+else:
+    aioredis = None
 
 # Redis URL from environment variable with fallback to local development
 REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
@@ -29,17 +38,51 @@ ANALYSIS_TTL = 3600  # 1 hour for analysis results
 RESUME_TTL = 1800  # 30 minutes for resume data
 JOB_DESC_TTL = 1800  # 30 minutes for job descriptions
 
-# Create Redis connection pool
-# decode_responses=False to handle binary data properly
-# max_connections: Maximum number of connections in the pool
-redis_pool = aioredis.ConnectionPool.from_url(
-    REDIS_URL,
-    max_connections=10,
-    decode_responses=False,
-)
+if not LITE_MODE:
+    redis_pool = aioredis.ConnectionPool.from_url(
+        REDIS_URL,
+        max_connections=10,
+        decode_responses=False,
+    )
+else:
+    redis_pool = None
 
-# Redis client instance
-redis_client: Optional[aioredis.Redis] = None
+redis_client: Optional[Any] = None
+
+
+class _InMemoryCache:
+    """Simple in-memory stand-in for Redis when Lite Mode is enabled."""
+
+    def __init__(self):
+        self.store: Dict[str, tuple[str, float]] = {}
+
+    async def get(self, key: str) -> Optional[str]:
+        value = self.store.get(key)
+        if not value:
+            return None
+        data, expires_at = value
+        if expires_at and expires_at < time.time():
+            self.store.pop(key, None)
+            return None
+        return data
+
+    async def setex(self, key: str, ttl_seconds: int, value: str) -> None:
+        expires_at = time.time() + ttl_seconds if ttl_seconds else 0
+        self.store[key] = (value, expires_at)
+
+    async def delete(self, key: str) -> None:
+        self.store.pop(key, None)
+
+    async def scan_iter(self, match: str):
+        for key in list(self.store.keys()):
+            if fnmatch.fnmatch(key, match):
+                yield key
+
+    async def ping(self):
+        return True
+
+    async def close(self):
+        self.store.clear()
 
 
 # ============================================================================
@@ -53,7 +96,10 @@ async def init_redis() -> None:
     Call this during application startup to establish Redis connections.
     """
     global redis_client
-    redis_client = aioredis.Redis(connection_pool=redis_pool)
+    if LITE_MODE:
+        redis_client = _InMemoryCache()
+    else:
+        redis_client = aioredis.Redis(connection_pool=redis_pool)
 
 
 async def close_redis() -> None:
@@ -63,7 +109,9 @@ async def close_redis() -> None:
     Call this during application shutdown to ensure clean connection closure.
     """
     if redis_client:
-        await redis_client.close()
+        if hasattr(redis_client, "close"):
+            await redis_client.close()
+    if redis_pool:
         await redis_pool.disconnect()
 
 
@@ -131,15 +179,11 @@ async def set_cache(
         return False
 
     try:
-        # Serialize to JSON
         serialized = json.dumps(value)
-
-        # Set with TTL
         ttl_seconds = ttl or DEFAULT_TTL
         await redis_client.setex(key, ttl_seconds, serialized)
         return True
     except Exception as e:
-        # Log error in production
         print(f"Redis set error for key {key}: {e}")
         return False
 
@@ -161,7 +205,6 @@ async def delete_cache(key: str) -> bool:
         await redis_client.delete(key)
         return True
     except Exception as e:
-        # Log error in production
         print(f"Redis delete error for key {key}: {e}")
         return False
 
@@ -186,7 +229,6 @@ async def delete_pattern(pattern: str) -> int:
             count += 1
         return count
     except Exception as e:
-        # Log error in production
         print(f"Redis delete pattern error for {pattern}: {e}")
         return 0
 
@@ -205,150 +247,8 @@ async def cache_exists(key: str) -> bool:
         return False
 
     try:
-        return await redis_client.exists(key) > 0
-    except Exception:
+        value = await redis_client.get(key)
+        return value is not None
+    except Exception as e:
+        print(f"Redis exists check error for {key}: {e}")
         return False
-
-
-# ============================================================================
-# Cache Key Generators
-# ============================================================================
-
-def analysis_cache_key(resume_id: str, job_desc_id: str) -> str:
-    """
-    Generate cache key for analysis results.
-
-    Args:
-        resume_id: Resume UUID
-        job_desc_id: Job description UUID
-
-    Returns:
-        Cache key string
-    """
-    return f"analysis:{resume_id}:{job_desc_id}"
-
-
-def resume_cache_key(resume_id: str) -> str:
-    """
-    Generate cache key for resume data.
-
-    Args:
-        resume_id: Resume UUID
-
-    Returns:
-        Cache key string
-    """
-    return f"resume:{resume_id}"
-
-
-def job_desc_cache_key(job_desc_id: str) -> str:
-    """
-    Generate cache key for job description data.
-
-    Args:
-        job_desc_id: Job description UUID
-
-    Returns:
-        Cache key string
-    """
-    return f"job_desc:{job_desc_id}"
-
-
-def user_cache_pattern(user_id: str) -> str:
-    """
-    Generate cache key pattern for all user data.
-
-    Args:
-        user_id: User UUID
-
-    Returns:
-        Cache key pattern (for use with delete_pattern)
-    """
-    return f"*:{user_id}:*"
-
-
-# ============================================================================
-# Cache Invalidation Strategies
-# ============================================================================
-
-async def invalidate_resume_cache(resume_id: str) -> None:
-    """
-    Invalidate cache for a specific resume and all related analyses.
-
-    Args:
-        resume_id: Resume UUID
-    """
-    # Delete resume cache
-    await delete_cache(resume_cache_key(resume_id))
-
-    # Delete all analyses for this resume
-    await delete_pattern(f"analysis:{resume_id}:*")
-
-
-async def invalidate_job_desc_cache(job_desc_id: str) -> None:
-    """
-    Invalidate cache for a specific job description and all related analyses.
-
-    Args:
-        job_desc_id: Job description UUID
-    """
-    # Delete job description cache
-    await delete_cache(job_desc_cache_key(job_desc_id))
-
-    # Delete all analyses for this job description
-    await delete_pattern(f"analysis:*:{job_desc_id}")
-
-
-async def invalidate_user_cache(user_id: str) -> None:
-    """
-    Invalidate all cache for a specific user.
-
-    Args:
-        user_id: User UUID
-    """
-    await delete_pattern(user_cache_pattern(user_id))
-
-
-# ============================================================================
-# Metrics Tracking
-# ============================================================================
-
-class CacheMetrics:
-    """
-    Track cache hit/miss metrics for monitoring.
-
-    In production, these would be sent to Prometheus or CloudWatch.
-    """
-
-    def __init__(self):
-        self.hits = 0
-        self.misses = 0
-
-    async def record_hit(self) -> None:
-        """Record a cache hit."""
-        self.hits += 1
-
-    async def record_miss(self) -> None:
-        """Record a cache miss."""
-        self.misses += 1
-
-    def get_hit_rate(self) -> float:
-        """
-        Calculate cache hit rate.
-
-        Returns:
-            float: Hit rate (0.0 to 1.0)
-        """
-        total = self.hits + self.misses
-        if total == 0:
-            return 0.0
-        return self.hits / total
-
-    def reset(self) -> None:
-        """Reset metrics counters."""
-        self.hits = 0
-        self.misses = 0
-
-
-# Global metrics instance
-cache_metrics = CacheMetrics()

@@ -7,11 +7,57 @@ Redis-based caching for LLM responses to reduce costs and latency.
 import hashlib
 import json
 import logging
+import time
+import fnmatch
 from typing import Optional, Dict, Any
-import redis.asyncio as aioredis
-from datetime import timedelta
+
+from backend.config import is_lite_mode
 
 logger = logging.getLogger(__name__)
+
+LITE_MODE = is_lite_mode()
+
+if not LITE_MODE:
+    import redis.asyncio as aioredis
+else:
+    aioredis = None
+
+
+class _InMemoryLLMCache:
+    """In-memory cache used when Lite Mode disables Redis."""
+
+    def __init__(self, ttl_seconds: int):
+        self.ttl_seconds = ttl_seconds
+        self.store: Dict[str, tuple[str, float]] = {}
+
+    async def get(self, key: str) -> Optional[str]:
+        value = self.store.get(key)
+        if not value:
+            return None
+        data, expires_at = value
+        if expires_at and expires_at < time.time():
+            self.store.pop(key, None)
+            return None
+        return data
+
+    async def setex(self, key: str, ttl_seconds: int, value: str) -> None:
+        expires_at = time.time() + ttl_seconds if ttl_seconds else 0
+        self.store[key] = (value, expires_at)
+
+    async def delete(self, key: str) -> None:
+        self.store.pop(key, None)
+
+    async def scan(self, cursor: int, match: str, count: int):
+        keys = [k for k in self.store.keys() if fnmatch.fnmatch(k, match)]
+        return 0, keys[:count]
+
+    async def scan_iter(self, match: str, count: int = 100):
+        for key in list(self.store.keys()):
+            if fnmatch.fnmatch(key, match):
+                yield key
+
+    async def close(self):
+        self.store.clear()
 
 
 class LLMCache:
@@ -39,28 +85,32 @@ class LLMCache:
         self.redis_url = redis_url
         self.ttl_seconds = ttl_seconds
         self.key_prefix = key_prefix
-        self._redis: Optional[aioredis.Redis] = None
+        self._redis: Optional[Any] = None
 
     async def connect(self) -> None:
         """Connect to Redis."""
         if self._redis is None:
             try:
-                self._redis = await aioredis.from_url(
-                    self.redis_url,
-                    encoding="utf-8",
-                    decode_responses=True
-                )
-                logger.info("Connected to Redis for LLM caching")
+                if LITE_MODE:
+                    self._redis = _InMemoryLLMCache(self.ttl_seconds)
+                else:
+                    self._redis = await aioredis.from_url(
+                        self.redis_url,
+                        encoding="utf-8",
+                        decode_responses=True
+                    )
+                logger.info("Connected to %s for LLM caching", "in-memory store" if LITE_MODE else "Redis")
             except Exception as e:
-                logger.warning(f"Failed to connect to Redis: {e}. Caching disabled.")
+                logger.warning(f"Failed to connect to cache backend: {e}. Caching disabled.")
                 self._redis = None
 
     async def disconnect(self) -> None:
         """Disconnect from Redis."""
         if self._redis:
-            await self._redis.close()
+            if hasattr(self._redis, "close"):
+                await self._redis.close()
             self._redis = None
-            logger.info("Disconnected from Redis")
+            logger.info("Disconnected from cache backend")
 
     def _generate_cache_key(
         self,
@@ -83,7 +133,6 @@ class LLMCache:
         Returns:
             Cache key hash
         """
-        # Create a unique identifier from all parameters
         cache_data = {
             "prompt": prompt,
             "system_prompt": system_prompt,
@@ -92,7 +141,6 @@ class LLMCache:
             "temperature": temperature,
         }
 
-        # Generate hash
         cache_str = json.dumps(cache_data, sort_keys=True)
         cache_hash = hashlib.sha256(cache_str.encode()).hexdigest()
 
@@ -173,7 +221,7 @@ class LLMCache:
 
             await self._redis.setex(
                 cache_key,
-                timedelta(seconds=self.ttl_seconds),
+                self.ttl_seconds,
                 json.dumps(response)
             )
 
@@ -232,22 +280,26 @@ class LLMCache:
             return False
 
         try:
-            # Find all keys with our prefix
             cursor = 0
             pattern = f"{self.key_prefix}*"
             deleted_count = 0
 
-            while True:
-                cursor, keys = await self._redis.scan(
-                    cursor, match=pattern, count=100
-                )
+            if hasattr(self._redis, "scan_iter"):
+                async for key in self._redis.scan_iter(match=pattern, count=100):
+                    await self._redis.delete(key)
+                    deleted_count += 1
+            else:
+                while True:
+                    cursor, keys = await self._redis.scan(
+                        cursor, match=pattern, count=100
+                    )
 
-                if keys:
-                    await self._redis.delete(*keys)
-                    deleted_count += len(keys)
+                    if keys:
+                        await self._redis.delete(*keys)
+                        deleted_count += len(keys)
 
-                if cursor == 0:
-                    break
+                    if cursor == 0:
+                        break
 
             logger.info(f"Cleared {deleted_count} cached responses")
             return True
@@ -267,19 +319,22 @@ class LLMCache:
             return {"total_keys": 0}
 
         try:
-            # Count keys with our prefix
-            cursor = 0
             pattern = f"{self.key_prefix}*"
             total_keys = 0
 
-            while True:
-                cursor, keys = await self._redis.scan(
-                    cursor, match=pattern, count=100
-                )
-                total_keys += len(keys)
+            if hasattr(self._redis, "scan_iter"):
+                async for _ in self._redis.scan_iter(match=pattern, count=100):
+                    total_keys += 1
+            else:
+                cursor = 0
+                while True:
+                    cursor, keys = await self._redis.scan(
+                        cursor, match=pattern, count=100
+                    )
+                    total_keys += len(keys)
 
-                if cursor == 0:
-                    break
+                    if cursor == 0:
+                        break
 
             return {
                 "total_keys": total_keys,
