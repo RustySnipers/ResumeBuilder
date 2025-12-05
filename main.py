@@ -621,6 +621,14 @@ async def readiness_check():
     Returns 200 if service is ready to accept traffic.
     Returns 503 if service is not ready.
     """
+    if LITE_MODE:
+        return {
+            "status": "ready",
+            "lite_mode": True,
+            "degraded": True,
+            "message": "Lite mode enabled; external services disabled",
+        }
+
     # Check critical dependencies
     from backend.database import check_db_health
 
