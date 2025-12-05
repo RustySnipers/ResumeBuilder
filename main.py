@@ -53,6 +53,9 @@ from pydantic import BaseModel, Field
 from typing import List
 import logging
 import json
+import os
+
+from backend.config import is_lite_mode
 
 # Import enhanced NLP modules (Phase 2.2)
 from backend.nlp.pii_detector import PIIDetector
@@ -61,11 +64,11 @@ from backend.nlp.keyword_extractor import KeywordExtractor
 from backend.nlp.section_parser import SectionParser
 
 # Import LLM modules (Phase 3.1 & 3.2)
-from backend.llm.claude_client import ClaudeClient
 from backend.llm.prompts import PromptTemplates
 from backend.llm.response_validator import ResponseValidator
 from backend.llm.cache import LLMCache
 from backend.llm.retry_logic import RetryConfig, retry_with_exponential_backoff
+from backend.llm.dummy_client import DummyClaudeClient
 
 # Import Auth routers (Phase 4)
 from backend.auth.router import router as auth_router
@@ -74,21 +77,23 @@ from backend.auth.api_key_router import router as api_key_router
 # Optional middleware (uncomment imports below if enabling)
 # from backend.middleware.rate_limit import RateLimitMiddleware
 # from backend.middleware.analytics import AnalyticsMiddleware
-from backend.auth.rate_limiter import UserRateLimiter
-
-# Import Export router (Phase 5)
-from backend.export.router import router as export_router
-
-# Import Analytics router (Phase 6)
-from backend.analytics.router import router as analytics_router
-
-# Import Webhook router (Phase 7)
-from backend.webhooks.router import router as webhook_router
 
 # Import Resume router (Phase 7)
 from backend.resumes.router import router as resume_router
 
-import os
+# Conditional routers that may rely on heavier dependencies
+analytics_router = None
+export_router = None
+webhook_router = None
+
+LITE_MODE = is_lite_mode()
+
+if not LITE_MODE:
+    from backend.llm.claude_client import ClaudeClient
+    from backend.auth.rate_limiter import UserRateLimiter
+    from backend.export.router import router as export_router
+    from backend.analytics.router import router as analytics_router
+    from backend.webhooks.router import router as webhook_router
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -109,20 +114,26 @@ app.include_router(auth_router)
 app.include_router(api_key_router)
 
 # Include Phase 5 export router
-app.include_router(export_router)
+if export_router and not LITE_MODE:
+    app.include_router(export_router)
 
 # Include Phase 6 analytics router
-app.include_router(analytics_router)
+if analytics_router and not LITE_MODE:
+    app.include_router(analytics_router)
 
 # Include Phase 7 webhook router
-app.include_router(webhook_router)
+if webhook_router and not LITE_MODE:
+    app.include_router(webhook_router)
 
 # Include Phase 7 resume router
 app.include_router(resume_router)
 
 # Initialize Rate Limiting (Phase 4)
-REDIS_URL_RATE = os.getenv("REDIS_URL", "redis://localhost:6379")
-user_rate_limiter = UserRateLimiter(redis_url=REDIS_URL_RATE)
+if not LITE_MODE:
+    REDIS_URL_RATE = os.getenv("REDIS_URL", "redis://localhost:6379")
+    user_rate_limiter = UserRateLimiter(redis_url=REDIS_URL_RATE)
+else:
+    user_rate_limiter = None
 
 # Add rate limiting middleware (optional - uncomment to enable)
 # app.add_middleware(RateLimitMiddleware, redis_url=REDIS_URL_RATE)
@@ -147,7 +158,7 @@ claude_client = None
 response_validator = ResponseValidator(min_length=100, max_length=50000)
 llm_cache = None
 
-if ANTHROPIC_API_KEY:
+if not LITE_MODE and ANTHROPIC_API_KEY:
     claude_client = ClaudeClient(
         api_key=ANTHROPIC_API_KEY,
         model="claude-sonnet-4-20250514",
@@ -160,7 +171,11 @@ if ANTHROPIC_API_KEY:
     llm_cache = LLMCache(redis_url=REDIS_URL, ttl_seconds=3600)
     logger.info("LLM cache initialized")
 else:
-    logger.warning("ANTHROPIC_API_KEY not set - LLM generation endpoints will be unavailable")
+    claude_client = DummyClaudeClient()
+    llm_cache = LLMCache(ttl_seconds=3600)
+    logger.warning(
+        "Lite mode or missing ANTHROPIC_API_KEY detected - using stub LLM client and in-memory cache"
+    )
 
 
 # ============================================================================
@@ -418,6 +433,7 @@ async def root():
         "version": "1.5.0-phase5",
         "status": "operational",
         "phase": "Production-Ready with Export System",
+        "lite_mode": LITE_MODE,
         "llm_available": claude_client is not None,
         "cache_enabled": llm_cache is not None,
         "cached_responses": cache_stats.get("total_keys", 0)
@@ -440,8 +456,6 @@ async def health_check():
         Health status with service details
     """
     import time
-    from sqlalchemy import text
-    from backend.database.connection import get_async_session
 
     health_status = {
         "status": "healthy",
@@ -451,20 +465,18 @@ async def health_check():
     }
 
     # Check database connectivity
-    try:
-        async for session in get_async_session():
-            result = await session.execute(text("SELECT 1"))
-            result.scalar()
-            health_status["services"]["database"] = {
-                "status": "healthy",
-                "type": "postgresql"
-            }
-            break
-    except Exception as e:
-        logger.error(f"Database health check failed: {e}")
+    from backend.database import check_db_health
+
+    db_healthy = await check_db_health()
+    if db_healthy:
+        health_status["services"]["database"] = {
+            "status": "healthy",
+            "type": "sqlite" if LITE_MODE else "postgresql",
+        }
+    else:
         health_status["services"]["database"] = {
             "status": "unhealthy",
-            "error": str(e)
+            "error": "Database connectivity check failed",
         }
         health_status["status"] = "degraded"
 
@@ -473,7 +485,7 @@ async def health_check():
         try:
             cache_stats = await llm_cache.get_stats()
             health_status["services"]["redis"] = {
-                "status": "healthy",
+                "status": "healthy" if not LITE_MODE else "in-memory",
                 "keys": cache_stats.get("total_keys", 0)
             }
         except Exception as e:
@@ -492,7 +504,7 @@ async def health_check():
     # Check LLM availability
     if claude_client:
         health_status["services"]["llm"] = {
-            "status": "healthy",
+            "status": "healthy" if not LITE_MODE else "stub",
             "model": claude_client.model
         }
     else:
@@ -519,18 +531,15 @@ async def readiness_check():
     Returns 503 if service is not ready.
     """
     # Check critical dependencies
-    try:
-        from backend.database.connection import get_async_session
-        from sqlalchemy import text
+    from backend.database import check_db_health
 
-        async for session in get_async_session():
-            await session.execute(text("SELECT 1"))
-            break
+    db_ready = await check_db_health()
 
-        return {"status": "ready"}
-    except Exception as e:
-        logger.error(f"Readiness check failed: {e}")
-        raise HTTPException(status_code=503, detail="Service not ready")
+    if db_ready:
+        return {"status": "ready", "lite_mode": LITE_MODE}
+
+    logger.error("Readiness check failed: database not reachable")
+    raise HTTPException(status_code=503, detail="Service not ready")
 
 
 @app.get("/health/live")

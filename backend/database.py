@@ -11,37 +11,58 @@ Features:
 - Dependency injection for FastAPI endpoints
 """
 
+from pathlib import Path
 from sqlalchemy.ext.asyncio import (
     create_async_engine,
     AsyncSession,
     async_sessionmaker,
 )
 from sqlalchemy.orm import declarative_base
-from typing import AsyncGenerator
+from typing import AsyncGenerator, Optional
 import os
+import tempfile
+
+from backend.config import is_lite_mode
 
 # ============================================================================
 # Database Configuration
 # ============================================================================
 
-# Database URL from environment variable with fallback to local development
-DATABASE_URL = os.environ.get(
-    "DATABASE_URL",
-    "postgresql+asyncpg://postgres:postgres@localhost:5432/resumebuilder"
-)
+_LITE_MODE = is_lite_mode()
+_lite_temp_dir: Optional[tempfile.TemporaryDirectory[str]] = None
+
+if _LITE_MODE:
+    _lite_temp_dir = tempfile.TemporaryDirectory()
+    default_sqlite_path = Path(_lite_temp_dir.name) / "lite.db"
+    DATABASE_URL = os.environ.get(
+        "DATABASE_URL",
+        f"sqlite+aiosqlite:///{default_sqlite_path}",
+    )
+else:
+    DATABASE_URL = os.environ.get(
+        "DATABASE_URL",
+        "postgresql+asyncpg://postgres:postgres@localhost:5432/resumebuilder",
+    )
 
 # Create async engine with connection pooling
 # pool_size: Number of connections to maintain in the pool
 # max_overflow: Maximum number of connections that can be created beyond pool_size
 # pool_pre_ping: Verify connections before using (prevents stale connections)
 # echo: Log all SQL statements (set to False in production)
-engine = create_async_engine(
-    DATABASE_URL,
-    pool_size=20,
-    max_overflow=10,
-    pool_pre_ping=True,
-    echo=os.environ.get("SQL_ECHO", "false").lower() == "true",
-)
+if _LITE_MODE:
+    engine = create_async_engine(
+        DATABASE_URL,
+        connect_args={"check_same_thread": False},
+        echo=os.environ.get("SQL_ECHO", "false").lower() == "true",
+    )
+else:
+    engine = create_async_engine(
+        DATABASE_URL,
+        pool_size=20,
+        max_overflow=10,
+        pool_pre_ping=True,
+        echo=os.environ.get("SQL_ECHO", "false").lower() == "true",
+    )
 
 # Create async session factory
 # expire_on_commit=False: Prevent automatic expiration of objects after commit
@@ -107,6 +128,8 @@ async def close_db() -> None:
     Call this during application shutdown to ensure clean connection closure.
     """
     await engine.dispose()
+    if _lite_temp_dir:
+        _lite_temp_dir.cleanup()
 
 
 # ============================================================================
