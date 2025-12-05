@@ -38,9 +38,18 @@ A secure FastAPI backend for generating ATS-friendly resumes with mandatory PII 
    - `REDIS_URL` (e.g., `redis://localhost:6379/0`)
    - `ANTHROPIC_API_KEY` for LLM-powered generation
 4. **Run the API**
-   ```bash
-   uvicorn main:app --reload --host 0.0.0.0 --port 8000
-   ```
+   - Quick start (uses sensible defaults):
+     ```bash
+     python main.py
+     ```
+   - Optional flags via environment variables:
+     ```bash
+     APP_HOST=127.0.0.1 APP_PORT=8080 APP_RELOAD=true python main.py
+     ```
+   - Equivalent Uvicorn invocation:
+     ```bash
+     uvicorn main:app --reload --host 0.0.0.0 --port 8000
+     ```
    - Docs: http://localhost:8000/docs
    - Health checks: `/`, `/health`, `/health/ready`, `/health/live`
 
