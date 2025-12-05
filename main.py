@@ -47,28 +47,23 @@ TODO Phase 5: Production Features
 - Implement webhook support for integrations
 """
 
+from __future__ import annotations
+
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
-from typing import List
+from typing import List, TYPE_CHECKING
 import logging
 import json
 import os
 
 from backend.config import is_lite_mode
 
-# Import enhanced NLP modules (Phase 2.2)
-from backend.nlp.pii_detector import PIIDetector
-from backend.nlp.semantic_analyzer import SemanticAnalyzer
-from backend.nlp.keyword_extractor import KeywordExtractor
-from backend.nlp.section_parser import SectionParser
-
 # Import LLM modules (Phase 3.1 & 3.2)
 from backend.llm.prompts import PromptTemplates
 from backend.llm.response_validator import ResponseValidator
 from backend.llm.cache import LLMCache
 from backend.llm.retry_logic import RetryConfig, retry_with_exponential_backoff
-from backend.llm.dummy_client import DummyClaudeClient
 
 # Import Auth routers (Phase 4)
 from backend.auth.router import router as auth_router
@@ -87,6 +82,12 @@ export_router = None
 webhook_router = None
 
 LITE_MODE = is_lite_mode()
+
+if TYPE_CHECKING:
+    from backend.nlp.pii_detector import PIIDetector
+    from backend.nlp.semantic_analyzer import SemanticAnalyzer
+    from backend.nlp.keyword_extractor import KeywordExtractor
+    from backend.nlp.section_parser import SectionParser
 
 if not LITE_MODE:
     from backend.llm.claude_client import ClaudeClient
@@ -128,54 +129,123 @@ if webhook_router and not LITE_MODE:
 # Include Phase 7 resume router
 app.include_router(resume_router)
 
-# Initialize Rate Limiting (Phase 4)
-if not LITE_MODE:
-    REDIS_URL_RATE = os.getenv("REDIS_URL", "redis://localhost:6379")
-    user_rate_limiter = UserRateLimiter(redis_url=REDIS_URL_RATE)
-else:
-    user_rate_limiter = None
+# Initialize lazy service placeholders
+pii_detector = None
+semantic_analyzer = None
+keyword_extractor = None
+section_parser = None
+user_rate_limiter = None
+llm_cache = None
+claude_client = None
 
-# Add rate limiting middleware (optional - uncomment to enable)
-# app.add_middleware(RateLimitMiddleware, redis_url=REDIS_URL_RATE)
-
-# Add analytics tracking middleware (Phase 6 - optional - uncomment to enable)
-# app.add_middleware(AnalyticsMiddleware)
-
-# ============================================================================
-# Initialize NLP Modules (Phase 2.2)
-# ============================================================================
-
-# Initialize NLP components at module level for reuse
-pii_detector = PIIDetector()
-semantic_analyzer = SemanticAnalyzer()
-keyword_extractor = KeywordExtractor()
-section_parser = SectionParser()
-
-# Initialize Claude client (Phase 3.1 & 3.2)
 # API key from environment variable for security
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
-claude_client = None
 response_validator = ResponseValidator(min_length=100, max_length=50000)
-llm_cache = None
 
-if not LITE_MODE and ANTHROPIC_API_KEY:
+
+def get_pii_detector() -> PIIDetector:
+    """Lazily initialize the PIIDetector."""
+    global pii_detector
+    if pii_detector is None:
+        from backend.nlp.pii_detector import PIIDetector
+
+        logger.info("Initializing PIIDetector on demand")
+        pii_detector = PIIDetector()
+    return pii_detector
+
+
+def get_semantic_analyzer() -> SemanticAnalyzer:
+    """Lazily initialize the SemanticAnalyzer."""
+    global semantic_analyzer
+    if semantic_analyzer is None:
+        from backend.nlp.semantic_analyzer import SemanticAnalyzer
+
+        logger.info("Initializing SemanticAnalyzer on demand")
+        semantic_analyzer = SemanticAnalyzer()
+    return semantic_analyzer
+
+
+def get_keyword_extractor() -> KeywordExtractor:
+    """Lazily initialize the KeywordExtractor."""
+    global keyword_extractor
+    if keyword_extractor is None:
+        from backend.nlp.keyword_extractor import KeywordExtractor
+
+        logger.info("Initializing KeywordExtractor on demand")
+        keyword_extractor = KeywordExtractor()
+    return keyword_extractor
+
+
+def get_section_parser() -> SectionParser:
+    """Lazily initialize the SectionParser."""
+    global section_parser
+    if section_parser is None:
+        from backend.nlp.section_parser import SectionParser
+
+        logger.info("Initializing SectionParser on demand")
+        section_parser = SectionParser()
+    return section_parser
+
+
+async def get_user_rate_limiter() -> UserRateLimiter | None:
+    """Return the Redis-backed rate limiter when available."""
+    global user_rate_limiter
+    if LITE_MODE:
+        logger.info("Lite mode enabled - skipping UserRateLimiter initialization")
+        return None
+
+    if user_rate_limiter is None:
+        redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
+        logger.info("Initializing UserRateLimiter for Redis backend at %s", redis_url)
+        user_rate_limiter = UserRateLimiter(redis_url=redis_url)
+
+    if user_rate_limiter and user_rate_limiter.redis_client is None:
+        await user_rate_limiter.connect()
+
+    return user_rate_limiter
+
+
+def get_claude_client():
+    """Lazily initialize the Claude client when configured."""
+    global claude_client
+
+    if claude_client:
+        return claude_client
+
+    if LITE_MODE:
+        logger.warning("Lite mode enabled - external Claude client will not be initialized")
+        return None
+
+    if not ANTHROPIC_API_KEY:
+        logger.warning("ANTHROPIC_API_KEY not configured - LLM endpoints will fast-fail")
+        return None
+
     claude_client = ClaudeClient(
         api_key=ANTHROPIC_API_KEY,
         model="claude-sonnet-4-20250514",
         max_tokens=4096,
     )
     logger.info("Claude client initialized successfully")
+    return claude_client
 
-    # Initialize LLM cache (Phase 3.2)
-    REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
-    llm_cache = LLMCache(redis_url=REDIS_URL, ttl_seconds=3600)
-    logger.info("LLM cache initialized")
-else:
-    claude_client = DummyClaudeClient()
-    llm_cache = LLMCache(ttl_seconds=3600)
-    logger.warning(
-        "Lite mode or missing ANTHROPIC_API_KEY detected - using stub LLM client and in-memory cache"
-    )
+
+async def get_llm_cache() -> LLMCache | None:
+    """Lazily initialize and connect the LLM cache backend."""
+    global llm_cache
+
+    if LITE_MODE and llm_cache is None:
+        logger.info("Lite mode enabled - using in-memory cache when requested")
+        llm_cache = LLMCache(ttl_seconds=3600)
+
+    if not LITE_MODE and llm_cache is None:
+        redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
+        logger.info("Initializing Redis-backed LLM cache at %s", redis_url)
+        llm_cache = LLMCache(redis_url=redis_url, ttl_seconds=3600)
+
+    if llm_cache and llm_cache._redis is None:
+        await llm_cache.connect()
+
+    return llm_cache
 
 
 # ============================================================================
@@ -291,7 +361,8 @@ def redact_pii(text: str) -> str:
         return text
 
     # Phase 2.2: Use enhanced PIIDetector with NER + regex
-    redacted, pii_counts = pii_detector.detect_and_redact(text)
+    detector = get_pii_detector()
+    redacted, pii_counts = detector.detect_and_redact(text)
 
     # Log PII detection statistics (for monitoring and compliance)
     logger.info(f"PII detected and redacted: {pii_counts}")
@@ -317,17 +388,21 @@ def enhanced_gap_analysis(resume: str, job_description: str) -> GapAnalysisResul
     Returns:
         GapAnalysisResult with keywords, suggestions, match score, and semantic similarity
     """
+    parser = get_section_parser()
+    analyzer = get_semantic_analyzer()
+    extractor = get_keyword_extractor()
+
     # 1. Parse resume into sections
-    resume_sections = section_parser.parse_sections(resume)
+    resume_sections = parser.parse_sections(resume)
 
     # 2. Calculate semantic similarity
-    overall_similarity = semantic_analyzer.calculate_similarity(resume, job_description)
-    section_similarity = semantic_analyzer.calculate_section_similarity(
+    overall_similarity = analyzer.calculate_similarity(resume, job_description)
+    section_similarity = analyzer.calculate_section_similarity(
         resume, job_description, resume_sections
     )
 
     # 3. Extract keywords using TF-IDF
-    tfidf_keywords = keyword_extractor.extract_tfidf_keywords(
+    tfidf_keywords = extractor.extract_tfidf_keywords(
         [job_description, resume], top_n=30
     )
 
@@ -337,7 +412,7 @@ def enhanced_gap_analysis(resume: str, job_description: str) -> GapAnalysisResul
     missing_keywords = [kw for kw in jd_keywords if kw not in resume_lower]
 
     # 6. Detect synonym matches (reduce false positives)
-    synonym_matches = semantic_analyzer.detect_synonyms(resume, missing_keywords)
+    synonym_matches = analyzer.detect_synonyms(resume, missing_keywords)
 
     # Remove keywords that have synonyms in resume
     missing_keywords = [kw for kw in missing_keywords if kw not in synonym_matches]
@@ -377,7 +452,7 @@ def enhanced_gap_analysis(resume: str, job_description: str) -> GapAnalysisResul
 
     # Keyword stuffing detection
     for section_name, section_text in resume_sections.items():
-        stuffed = section_parser.detect_keyword_stuffing(section_text)
+        stuffed = parser.detect_keyword_stuffing(section_text)
         if stuffed:
             suggestions.append(
                 f"Warning: The {section_name} section may have keyword stuffing. "
@@ -408,8 +483,15 @@ def enhanced_gap_analysis(resume: str, job_description: str) -> GapAnalysisResul
 @app.on_event("startup")
 async def startup_event():
     """Initialize connections on startup."""
-    if llm_cache:
-        await llm_cache.connect()
+    if LITE_MODE:
+        logger.info("Startup: Lite mode detected - skipping Redis-backed services")
+    else:
+        logger.info("Startup: Standard mode - dependencies initialize lazily on first use")
+
+    if not ANTHROPIC_API_KEY:
+        logger.warning(
+            "Startup: ANTHROPIC_API_KEY not set - LLM endpoints will return 503 until configured"
+        )
 
 
 @app.on_event("shutdown")
@@ -427,15 +509,17 @@ async def root():
     Returns basic service information and operational status.
     Use /health for detailed health checks.
     """
-    cache_stats = await llm_cache.get_stats() if llm_cache else {}
+    cache = await get_llm_cache()
+    cache_stats = await cache.get_stats() if cache else {}
+    client = get_claude_client()
     return {
         "service": "ATS Resume Builder API",
         "version": "1.5.0-phase5",
         "status": "operational",
         "phase": "Production-Ready with Export System",
         "lite_mode": LITE_MODE,
-        "llm_available": claude_client is not None,
-        "cache_enabled": llm_cache is not None,
+        "llm_available": client is not None,
+        "cache_enabled": cache is not None,
         "cached_responses": cache_stats.get("total_keys", 0)
     }
 
@@ -481,9 +565,10 @@ async def health_check():
         health_status["status"] = "degraded"
 
     # Check Redis connectivity
-    if llm_cache:
+    cache = await get_llm_cache()
+    if cache:
         try:
-            cache_stats = await llm_cache.get_stats()
+            cache_stats = await cache.get_stats()
             health_status["services"]["redis"] = {
                 "status": "healthy" if not LITE_MODE else "in-memory",
                 "keys": cache_stats.get("total_keys", 0)
@@ -502,10 +587,11 @@ async def health_check():
         }
 
     # Check LLM availability
-    if claude_client:
+    client = get_claude_client()
+    if client:
         health_status["services"]["llm"] = {
             "status": "healthy" if not LITE_MODE else "stub",
-            "model": claude_client.model
+            "model": client.model
         }
     else:
         health_status["services"]["llm"] = {
@@ -628,7 +714,8 @@ async def generate_optimized_resume(resume_input: ResumeInput) -> OptimizedResum
         - Response validation for safety
     """
     # Check if Claude client is available
-    if not claude_client:
+    client = get_claude_client()
+    if not client:
         raise HTTPException(
             status_code=503,
             detail="LLM service unavailable. ANTHROPIC_API_KEY not configured."
@@ -659,13 +746,14 @@ async def generate_optimized_resume(resume_input: ResumeInput) -> OptimizedResum
 
         # Check cache first (Phase 3.2)
         cached_response = None
-        if llm_cache:
-            cached_response = await llm_cache.get(
+        cache = await get_llm_cache()
+        if cache:
+            cached_response = await cache.get(
                 prompt=prompt,
                 system_prompt=system_prompt,
-                model=claude_client.model,
-                max_tokens=claude_client.max_tokens,
-                temperature=claude_client.temperature,
+                model=client.model,
+                max_tokens=client.max_tokens,
+                temperature=client.temperature,
             )
 
         if cached_response:
@@ -675,7 +763,7 @@ async def generate_optimized_resume(resume_input: ResumeInput) -> OptimizedResum
         else:
             # Call Claude API with retry logic (Phase 3.2)
             async def generate_with_retry():
-                return await claude_client.generate(
+                return await client.generate(
                     prompt=prompt,
                     system_prompt=system_prompt,
                 )
@@ -688,13 +776,13 @@ async def generate_optimized_resume(resume_input: ResumeInput) -> OptimizedResum
             response["cached"] = False
 
             # Cache the response
-            if llm_cache:
-                await llm_cache.set(
+            if cache:
+                await cache.set(
                     prompt=prompt,
                     system_prompt=system_prompt,
-                    model=claude_client.model,
-                    max_tokens=claude_client.max_tokens,
-                    temperature=claude_client.temperature,
+                    model=client.model,
+                    max_tokens=client.max_tokens,
+                    temperature=client.temperature,
                     response=response,
                 )
 
@@ -767,13 +855,14 @@ async def get_usage_stats():
     Raises:
         HTTPException: If LLM is unavailable
     """
-    if not claude_client:
+    client = get_claude_client()
+    if not client:
         raise HTTPException(
             status_code=503,
             detail="LLM service unavailable. ANTHROPIC_API_KEY not configured."
         )
 
-    return claude_client.get_usage_stats()
+    return client.get_usage_stats()
 
 
 @app.post("/api/v1/generate/stream")
@@ -796,7 +885,8 @@ async def generate_optimized_resume_stream(resume_input: ResumeInput):
         - PII redaction applied before LLM interaction
         - API key stored in environment variable
     """
-    if not claude_client:
+    client = get_claude_client()
+    if not client:
         raise HTTPException(
             status_code=503,
             detail="LLM service unavailable. ANTHROPIC_API_KEY not configured."
@@ -832,7 +922,7 @@ async def generate_optimized_resume_stream(resume_input: ResumeInput):
 
             # Stream response from Claude
             full_response = ""
-            async for chunk in claude_client.generate_stream(
+            async for chunk in client.generate_stream(
                 prompt=prompt,
                 system_prompt=system_prompt,
             ):
@@ -870,13 +960,14 @@ async def get_cache_stats():
     Returns:
         Dictionary with cache statistics
     """
-    if not llm_cache:
+    cache = await get_llm_cache()
+    if not cache:
         raise HTTPException(
             status_code=503,
             detail="Cache not enabled"
         )
 
-    return await llm_cache.get_stats()
+    return await cache.get_stats()
 
 
 @app.delete("/api/v1/cache")
@@ -887,13 +978,14 @@ async def clear_cache():
     Returns:
         Success message
     """
-    if not llm_cache:
+    cache = await get_llm_cache()
+    if not cache:
         raise HTTPException(
             status_code=503,
             detail="Cache not enabled"
         )
 
-    success = await llm_cache.clear_all()
+    success = await cache.clear_all()
     return {"success": success, "message": "Cache cleared"}
 
 
