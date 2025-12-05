@@ -519,7 +519,7 @@ async def root():
     client = get_claude_client()
     return {
         "service": "ATS Resume Builder API",
-        "version": "1.5.0-phase5",
+        "version": app.version,
         "status": "operational",
         "phase": "Production-Ready with Export System",
         "lite_mode": LITE_MODE,

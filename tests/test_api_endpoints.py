@@ -28,8 +28,8 @@ class TestHealthCheckEndpoint:
         data = response.json()
         assert data["service"] == "ATS Resume Builder API"
         assert data["status"] == "operational"
-        assert data["version"] == "1.0.0-phase1"
-        assert data["phase"] == "Foundation and Compliance Backend"
+        assert data["version"] == app.version
+        assert data["phase"] == "Production-Ready with Export System"
 
     @pytest.mark.integration
     def test_root_endpoint_response_structure(self, client):
@@ -40,6 +40,18 @@ class TestHealthCheckEndpoint:
         required_fields = ["service", "version", "status", "phase"]
         for field in required_fields:
             assert field in data
+
+
+class TestRootVersion:
+    """Unit tests for ensuring root endpoint metadata stays in sync."""
+
+    def test_root_version_matches_app_metadata(self, client):
+        """Root payload version should match app metadata to avoid drift."""
+        response = client.get("/")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["version"] == app.version
 
 
 class TestAnalyzeEndpoint:
