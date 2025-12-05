@@ -892,13 +892,27 @@ async def clear_cache():
 # Application Entry Point
 # ============================================================================
 
+def _get_bool_env(var_name: str, default: bool = False) -> bool:
+    """Parse boolean-ish environment variables."""
+
+    value = os.getenv(var_name)
+    if value is None:
+        return default
+
+    return str(value).strip().lower() in {"1", "true", "yes", "on"}
+
+
 if __name__ == "__main__":
     import uvicorn
 
+    host = os.getenv("APP_HOST", "0.0.0.0")
+    port = int(os.getenv("APP_PORT", "8000"))
+    reload = _get_bool_env("APP_RELOAD", False)
+
     uvicorn.run(
-        "main:app",
-        host="0.0.0.0",
-        port=8000,
-        reload=True,
+        app,
+        host=host,
+        port=port,
+        reload=reload,
         log_level="info"
     )
