@@ -12,7 +12,7 @@ from uuid import UUID, uuid4
 from sqlalchemy import DateTime, Integer, Enum as SQLEnum, ForeignKey, Index, JSON, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from backend.models.base import Base
+from backend.database import Base
 from backend.models.webhook import WebhookEventType
 
 if TYPE_CHECKING:

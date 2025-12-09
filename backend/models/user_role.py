@@ -4,8 +4,7 @@ UserRole Model - Phase 4
 Association table for many-to-many relationship between users and roles.
 """
 
-from sqlalchemy import Column, DateTime, ForeignKey, UniqueConstraint
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import Column, DateTime, ForeignKey, UniqueConstraint, Uuid as UUID
 from datetime import datetime
 import uuid
 from backend.database import Base

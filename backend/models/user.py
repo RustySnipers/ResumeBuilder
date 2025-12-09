@@ -4,8 +4,7 @@ User Model - Phase 2.1, Enhanced in Phase 4
 Represents users of the resume builder application with authentication fields.
 """
 
-from sqlalchemy import Column, String, Boolean, DateTime, Integer
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import Column, String, Boolean, DateTime, Integer, Uuid as UUID
 from sqlalchemy.orm import relationship
 from datetime import datetime
 import uuid

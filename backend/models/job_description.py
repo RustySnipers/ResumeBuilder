@@ -4,8 +4,7 @@ Job Description Model - Phase 2.1
 Represents job descriptions for resume optimization.
 """
 
-from sqlalchemy import Column, String, Text, DateTime, ForeignKey
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import Column, String, Text, DateTime, ForeignKey, Uuid as UUID
 from sqlalchemy.orm import relationship
 from datetime import datetime
 import uuid

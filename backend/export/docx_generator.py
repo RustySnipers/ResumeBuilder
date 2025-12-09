@@ -52,7 +52,7 @@ class DOCXGenerator:
         core_props.subject = "Professional Resume"
 
         # Set up styles
-        self._configure_styles()
+        self._configure_styles(template)
 
         # Build content
         self._build_header(resume_data)
@@ -95,8 +95,8 @@ class DOCXGenerator:
 
         return docx_bytes
 
-    def _configure_styles(self):
-        """Configure document styles."""
+    def _configure_styles(self, template: str = "standard_ats"):
+        """Configure document styles based on template."""
         # Set narrow margins (0.5 inch all around)
         sections = self.doc.sections
         for section in sections:
@@ -105,45 +105,75 @@ class DOCXGenerator:
             section.left_margin = Inches(0.5)
             section.right_margin = Inches(0.5)
 
+        # Template Configurations
+        if template == "modern_ats":
+            self.header_color = RGBColor(44, 90, 160)  # Dark Blue
+            self.text_color = RGBColor(33, 33, 33)     # Dark Grey
+            self.sub_text_color = RGBColor(80, 80, 80) # Muted
+            self.font_name = 'Calibri'
+            self.title_size = Pt(24)
+            self.h2_size = Pt(14)
+            self.h2_caps = False
+        elif template == "strict_ats":
+            # strict_ats (iCIMS/Taleo optimized)
+            self.header_color = RGBColor(0, 0, 0)      # Black
+            self.text_color = RGBColor(0, 0, 0)        # Black
+            self.sub_text_color = RGBColor(0, 0, 0)    # Black
+            self.font_name = 'Arial'
+            self.title_size = Pt(20)                   # Slightly smaller title
+            self.h2_size = Pt(11)                      # Standard header size
+            self.h2_caps = True                        # UPPERCASE HEADERS
+        else:
+            # standard_ats (Default)
+            self.header_color = RGBColor(0, 0, 0)      # Black
+            self.text_color = RGBColor(0, 0, 0)        # Black
+            self.sub_text_color = RGBColor(0, 0, 0)    # Black
+            self.font_name = 'Arial'
+            self.title_size = Pt(22)
+            self.h2_size = Pt(12)
+            self.h2_caps = True
+
         # Modify existing styles
         styles = self.doc.styles
-
+        
         # Normal style
         style_normal = styles['Normal']
         font_normal = style_normal.font
-        font_normal.name = 'Calibri'
-        font_normal.size = Pt(11)
-        font_normal.color.rgb = RGBColor(0, 0, 0)
+        font_normal.name = self.font_name
+        font_normal.size = Pt(10.5)
+        font_normal.color.rgb = self.text_color
 
         # Heading 1 (Name)
         style_h1 = styles['Heading 1']
         font_h1 = style_h1.font
-        font_h1.name = 'Calibri'
-        font_h1.size = Pt(24)
+        font_h1.name = self.font_name
+        font_h1.size = self.title_size
         font_h1.bold = True
-        font_h1.color.rgb = RGBColor(26, 26, 26)
+        font_h1.color.rgb = RGBColor(0, 0, 0) # Name always black
 
         # Heading 2 (Section headers)
         style_h2 = styles['Heading 2']
         font_h2 = style_h2.font
-        font_h2.name = 'Calibri'
-        font_h2.size = Pt(14)
+        font_h2.name = self.font_name
+        font_h2.size = self.h2_size
         font_h2.bold = True
-        font_h2.color.rgb = RGBColor(44, 90, 160)
+        font_h2.color.rgb = self.header_color
+        # Note: All Caps handled in build method as python-docx style caps is tricky
 
         # Heading 3 (Job titles)
         style_h3 = styles['Heading 3']
         font_h3 = style_h3.font
-        font_h3.name = 'Calibri'
-        font_h3.size = Pt(12)
+        font_h3.name = self.font_name
+        font_h3.size = Pt(11)
         font_h3.bold = True
-        font_h3.color.rgb = RGBColor(26, 26, 26)
+        font_h3.color.rgb = self.text_color
 
     def _build_header(self, resume_data: Dict[str, Any]):
         """Build resume header with name and contact info."""
         # Name
         if "name" in resume_data:
-            name_para = self.doc.add_paragraph(resume_data["name"], style='Heading 1')
+            name_text = resume_data["name"]
+            name_para = self.doc.add_paragraph(name_text, style='Heading 1')
             name_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
         # Contact information
@@ -165,20 +195,21 @@ class DOCXGenerator:
             contact_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
             run = contact_para.runs[0]
             run.font.size = Pt(10)
-            run.font.color.rgb = RGBColor(74, 74, 74)
+            run.font.color.rgb = self.sub_text_color
+
+    def _build_section_header(self, title: str):
+        """Build section header with optional all-caps."""
+        text = title.upper() if getattr(self, 'h2_caps', False) else title
+        self.doc.add_paragraph(text, style='Heading 2')
 
     def _build_summary(self, summary: str):
         """Build professional summary section."""
-        # Section header
-        self.doc.add_paragraph("PROFESSIONAL SUMMARY", style='Heading 2')
-
-        # Summary text
+        self._build_section_header("PROFESSIONAL SUMMARY")
         self.doc.add_paragraph(summary)
 
     def _build_experience(self, experience: List[Dict[str, Any]]):
         """Build work experience section."""
-        # Section header
-        self.doc.add_paragraph("WORK EXPERIENCE", style='Heading 2')
+        self._build_section_header("WORK EXPERIENCE")
 
         for job in experience:
             # Job title
@@ -196,8 +227,8 @@ class DOCXGenerator:
                 company_para = self.doc.add_paragraph(" - ".join(company_parts))
                 run = company_para.runs[0]
                 run.font.bold = True
-                run.font.size = Pt(11)
-                run.font.color.rgb = RGBColor(74, 74, 74)
+                run.font.size = Pt(10.5)
+                run.font.color.rgb = self.sub_text_color
 
             # Dates
             date_parts = []
@@ -213,7 +244,7 @@ class DOCXGenerator:
                 run = date_para.runs[0]
                 run.font.size = Pt(10)
                 run.font.italic = True
-                run.font.color.rgb = RGBColor(106, 106, 106)
+                run.font.color.rgb = self.sub_text_color
 
             # Description
             if "description" in job and job["description"]:
@@ -229,8 +260,7 @@ class DOCXGenerator:
 
     def _build_education(self, education: List[Dict[str, Any]]):
         """Build education section."""
-        # Section header
-        self.doc.add_paragraph("EDUCATION", style='Heading 2')
+        self._build_section_header("EDUCATION")
 
         for edu in education:
             # Degree
@@ -242,8 +272,8 @@ class DOCXGenerator:
                 inst_para = self.doc.add_paragraph(edu["institution"])
                 run = inst_para.runs[0]
                 run.font.bold = True
-                run.font.size = Pt(11)
-                run.font.color.rgb = RGBColor(74, 74, 74)
+                run.font.size = Pt(10.5)
+                run.font.color.rgb = self.sub_text_color
 
             # Dates
             date_parts = []
@@ -257,7 +287,7 @@ class DOCXGenerator:
                 run = date_para.runs[0]
                 run.font.size = Pt(10)
                 run.font.italic = True
-                run.font.color.rgb = RGBColor(106, 106, 106)
+                run.font.color.rgb = self.sub_text_color
 
             # GPA
             if "gpa" in edu:
@@ -273,17 +303,13 @@ class DOCXGenerator:
 
     def _build_skills(self, skills: List[str]):
         """Build skills section."""
-        # Section header
-        self.doc.add_paragraph("SKILLS", style='Heading 2')
-
-        # Format skills as comma-separated list
+        self._build_section_header("SKILLS")
         skills_text = ", ".join(skills)
         self.doc.add_paragraph(skills_text)
 
     def _build_certifications(self, certifications: List[Dict[str, Any]]):
         """Build certifications section."""
-        # Section header
-        self.doc.add_paragraph("CERTIFICATIONS", style='Heading 2')
+        self._build_section_header("CERTIFICATIONS")
 
         for cert in certifications:
             # Certificate name
@@ -295,8 +321,8 @@ class DOCXGenerator:
                 issuer_para = self.doc.add_paragraph(cert["issuer"])
                 run = issuer_para.runs[0]
                 run.font.bold = True
-                run.font.size = Pt(11)
-                run.font.color.rgb = RGBColor(74, 74, 74)
+                run.font.size = Pt(10.5)
+                run.font.color.rgb = self.sub_text_color
 
             # Date
             if "date" in cert:
@@ -314,8 +340,7 @@ class DOCXGenerator:
 
     def _build_projects(self, projects: List[Dict[str, Any]]):
         """Build projects section."""
-        # Section header
-        self.doc.add_paragraph("PROJECTS", style='Heading 2')
+        self._build_section_header("PROJECTS")
 
         for project in projects:
             # Project name
@@ -332,6 +357,7 @@ class DOCXGenerator:
                 tech_para = self.doc.add_paragraph(tech_text)
                 run = tech_para.runs[0]
                 run.font.italic = True
+                run.font.color.rgb = self.sub_text_color
 
             # URL
             if "url" in project:

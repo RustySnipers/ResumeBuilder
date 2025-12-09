@@ -132,7 +132,7 @@ def verify_token(token: str, expected_type: str = "access") -> Optional[Dict[str
 
         # Check expiration (jose does this automatically, but we log it)
         exp = payload.get("exp")
-        if exp and datetime.fromtimestamp(exp) < datetime.utcnow():
+        if exp and datetime.utcfromtimestamp(exp) < datetime.utcnow():
             logger.warning("Token expired")
             return None
 

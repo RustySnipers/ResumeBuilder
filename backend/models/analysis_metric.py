@@ -11,7 +11,7 @@ from uuid import UUID, uuid4
 from sqlalchemy import DateTime, Float, Integer, ForeignKey, Index, JSON
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from backend.models.base import Base
+from backend.database import Base
 
 if TYPE_CHECKING:
     from backend.models.analysis import Analysis
@@ -72,7 +72,7 @@ class AnalysisMetric(Base):
     llm_cached: Mapped[bool] = mapped_column(default=False)
 
     # Additional metrics
-    metadata: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    meta_data: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
 
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(
@@ -113,7 +113,7 @@ class AnalysisMetric(Base):
         llm_cost: Optional[float] = None,
         llm_tokens: Optional[int] = None,
         llm_cached: bool = False,
-        metadata: Optional[dict] = None,
+        meta_data: Optional[dict] = None,
     ) -> "AnalysisMetric":
         """Create analysis metric from analysis results
 
@@ -133,7 +133,7 @@ class AnalysisMetric(Base):
             llm_cost: LLM cost in dollars
             llm_tokens: LLM tokens used
             llm_cached: Whether LLM response was cached
-            metadata: Additional metadata
+            meta_data: Additional metadata
 
         Returns:
             AnalysisMetric instance
@@ -154,7 +154,7 @@ class AnalysisMetric(Base):
             llm_cost=llm_cost,
             llm_tokens=llm_tokens,
             llm_cached=llm_cached,
-            metadata=metadata or {},
+            meta_data=meta_data or {},
         )
 
     @property

@@ -39,7 +39,7 @@ from backend.auth.schemas import (
     EmailVerificationConfirm,
     EmailVerificationResponse,
 )
-from backend.database.session import get_session
+from backend.database import get_db as get_session
 from backend.repositories.user_repository import UserRepository
 from backend.repositories.session_repository import SessionRepository
 from backend.repositories.audit_log_repository import AuditLogRepository
@@ -49,11 +49,11 @@ from backend.models.user import User
 from backend.models.webhook import WebhookEventType
 from backend.webhooks.service import WebhookService
 from backend.models.verification_token import VerificationToken, TokenType
-from backend.email.service import EmailService, EmailConfig
+from backend.mail.service import EmailService, EmailConfig
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/auth", tags=["Authentication"])
+router = APIRouter(prefix="/api/v1/auth", tags=["Authentication"])
 
 # Initialize email service
 email_service = EmailService(EmailConfig.from_env())
@@ -169,7 +169,7 @@ async def login(
             action="failed_login",
             ip_address=request.client.host if request.client else None,
             user_agent=request.headers.get("user-agent"),
-            metadata={"reason": "user_not_found", "email": form_data.username},
+            meta_data={"reason": "user_not_found", "email": form_data.username},
         )
         await session.commit()
 
@@ -193,7 +193,7 @@ async def login(
             user_id=user.id,
             ip_address=request.client.host if request.client else None,
             user_agent=request.headers.get("user-agent"),
-            metadata={"reason": "incorrect_password"},
+            meta_data={"reason": "incorrect_password"},
         )
         await session.commit()
 
@@ -415,7 +415,7 @@ async def update_current_user_profile(
     await audit_repo.log_event(
         action="profile_update",
         user_id=current_user.id,
-        metadata={"updated_fields": list(update_data.keys())},
+        meta_data={"updated_fields": list(update_data.keys())},
     )
 
     await session.commit()
@@ -767,7 +767,7 @@ async def reset_password(
 
     # Send password changed notification email
     try:
-        from backend.email.templates import EmailTemplates
+        from backend.mail.templates import EmailTemplates
         html_body = EmailTemplates.password_changed_email(name=user.full_name)
         await email_service.send_email(
             to=user.email,

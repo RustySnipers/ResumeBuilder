@@ -11,7 +11,7 @@ from uuid import UUID, uuid4
 from sqlalchemy import DateTime, Date, Integer, Float, ForeignKey, Index, JSON
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from backend.models.base import Base
+from backend.database import Base
 
 if TYPE_CHECKING:
     from backend.models.user import User
@@ -78,7 +78,7 @@ class DailyMetric(Base):
     )
 
     # Additional metrics
-    metadata: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    meta_data: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
 
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(
@@ -125,7 +125,7 @@ class DailyMetric(Base):
             user_id=user_id,
             metric_date=metric_date,
             template_usage={},
-            metadata={},
+            meta_data={},
         )
 
     @property

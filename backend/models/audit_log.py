@@ -4,8 +4,7 @@ AuditLog Model - Phase 4
 Represents audit log entries for security and compliance tracking.
 """
 
-from sqlalchemy import Column, String, DateTime, ForeignKey, Text
-from sqlalchemy.dialects.postgresql import UUID, JSONB
+from sqlalchemy import Column, String, DateTime, ForeignKey, Uuid as UUID, JSON as JSONB, Text, JSON
 from sqlalchemy.orm import relationship
 from datetime import datetime
 import uuid
@@ -24,7 +23,7 @@ class AuditLog(Base):
         resource_id: ID of the specific resource accessed
         ip_address: IP address of the request
         user_agent: User agent string from the request
-        metadata: Additional context as JSON (e.g., error details, request parameters)
+        meta_data: Additional context as JSON (e.g., error details, request parameters)
         created_at: Timestamp of the event
 
     Relationships:
@@ -45,7 +44,7 @@ class AuditLog(Base):
     resource_id = Column(UUID(as_uuid=True), nullable=True)
     ip_address = Column(String(45), nullable=True)  # IPv6 max length
     user_agent = Column(Text, nullable=True)
-    metadata = Column(JSONB, nullable=True)
+    meta_data = Column(JSONB, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
 
     # Relationships

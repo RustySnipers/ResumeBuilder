@@ -32,7 +32,7 @@ class AuditLogRepository(BaseRepository[AuditLog]):
         resource_id: Optional[uuid.UUID] = None,
         ip_address: Optional[str] = None,
         user_agent: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None,
+        meta_data: Optional[Dict[str, Any]] = None,
     ) -> AuditLog:
         """
         Create an audit log entry.
@@ -44,7 +44,7 @@ class AuditLogRepository(BaseRepository[AuditLog]):
             resource_id: Optional resource UUID
             ip_address: Optional IP address
             user_agent: Optional user agent string
-            metadata: Optional additional context
+            meta_data: Optional additional context
 
         Returns:
             Created AuditLog instance
@@ -56,7 +56,7 @@ class AuditLogRepository(BaseRepository[AuditLog]):
             resource_id=resource_id,
             ip_address=ip_address,
             user_agent=user_agent,
-            metadata=metadata,
+            meta_data=meta_data,
         )
 
     async def get_by_user(

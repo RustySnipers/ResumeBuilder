@@ -10,7 +10,7 @@ from fastapi.security import OAuth2PasswordBearer, APIKeyHeader
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.auth.security import verify_token, verify_api_key_format
-from backend.database.session import get_session
+from backend.database import get_db as get_session
 from backend.models.user import User
 from backend.repositories.user_repository import UserRepository
 import logging
@@ -66,8 +66,15 @@ async def get_current_user(
         raise credentials_exception
 
     # Extract user ID from token
-    user_id: str = payload.get("sub")
-    if not user_id:
+    user_id_str: str = payload.get("sub")
+    if not user_id_str:
+        raise credentials_exception
+
+    try:
+        import uuid
+        user_id = uuid.UUID(user_id_str)
+    except ValueError:
+        # Invalid UUID format
         raise credentials_exception
 
     # Fetch user from database

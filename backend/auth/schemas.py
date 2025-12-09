@@ -6,6 +6,7 @@ Pydantic models for authentication requests and responses.
 
 from datetime import datetime
 from typing import Optional, List
+from uuid import UUID
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
 
@@ -39,7 +40,7 @@ class UserLogin(BaseModel):
 
 class UserResponse(BaseModel):
     """User profile response"""
-    id: str
+    id: UUID
     email: EmailStr
     full_name: str
     is_active: bool
@@ -165,7 +166,7 @@ class APIKeyCreate(BaseModel):
 
 class APIKeyResponse(BaseModel):
     """API key response (only shown once on creation)"""
-    id: str
+    id: UUID
     name: str
     key: str  # Full key (only returned on creation)
     prefix: str
@@ -179,7 +180,7 @@ class APIKeyResponse(BaseModel):
 
 class APIKeyInfo(BaseModel):
     """API key info (without the actual key)"""
-    id: str
+    id: UUID
     name: str
     prefix: str
     scopes: List[str]
@@ -205,7 +206,7 @@ class APIKeyUpdate(BaseModel):
 
 class RoleResponse(BaseModel):
     """Role response"""
-    id: str
+    id: UUID
     name: str
     description: Optional[str]
     permissions: List[str]
@@ -220,14 +221,14 @@ class RoleResponse(BaseModel):
 
 class AuditLogResponse(BaseModel):
     """Audit log entry"""
-    id: str
-    user_id: Optional[str]
+    id: UUID
+    user_id: Optional[UUID]
     action: str
     resource: Optional[str]
     resource_id: Optional[str]
     ip_address: Optional[str]
     user_agent: Optional[str]
-    metadata: Optional[dict]
+    meta_data: Optional[dict]
     created_at: datetime
 
     class Config:

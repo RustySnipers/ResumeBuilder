@@ -10,7 +10,7 @@ from typing import Callable
 import logging
 
 from backend.auth.rate_limiter import UserRateLimiter
-from backend.database.session import get_session
+from backend.database import get_db as get_session
 
 logger = logging.getLogger(__name__)
 

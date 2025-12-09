@@ -4,8 +4,7 @@ Resume Model - Phase 2.1
 Represents user resumes with versioning and PII redaction.
 """
 
-from sqlalchemy import Column, String, Text, Integer, DateTime, ForeignKey
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import Column, String, Text, Integer, DateTime, ForeignKey, Uuid as UUID, JSON
 from sqlalchemy.orm import relationship
 from datetime import datetime
 import uuid
@@ -40,6 +39,7 @@ class Resume(Base):
     title = Column(String(255), nullable=False)
     raw_text = Column(Text, nullable=False)
     redacted_text = Column(Text, nullable=True)
+    parsed_data = Column(JSON, nullable=True)
     version = Column(Integer, default=1, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(

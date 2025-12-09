@@ -8,10 +8,9 @@ This module provides advanced keyword extraction capabilities including:
 - Industry-specific vocabulary matching
 """
 
-from sklearn.feature_extraction.text import TfidfVectorizer
-from nltk.stem import WordNetLemmatizer
-from nltk.corpus import stopwords
 import re
+from typing import List, Tuple
+import logging
 from typing import List, Tuple
 import logging
 
@@ -24,10 +23,12 @@ class KeywordExtractor:
     def __init__(self):
         """Initialize the keyword extractor with NLTK components."""
         try:
+            from nltk.stem import WordNetLemmatizer
+            from nltk.corpus import stopwords
             self.lemmatizer = WordNetLemmatizer()
             self.stop_words = set(stopwords.words('english'))
-        except LookupError:
-            logger.warning("NLTK data not found. Some features may not work correctly.")
+        except (ImportError, LookupError):
+            logger.warning("NLTK data not found. some features may not work correctly.")
             self.lemmatizer = None
             self.stop_words = set()
 
@@ -77,6 +78,7 @@ class KeywordExtractor:
             processed_docs = [self._preprocess(doc) for doc in documents]
 
             # TF-IDF
+            from sklearn.feature_extraction.text import TfidfVectorizer
             vectorizer = TfidfVectorizer(
                 max_features=100,
                 ngram_range=(1, 3),  # Unigrams to trigrams
@@ -95,6 +97,9 @@ class KeywordExtractor:
             keyword_scores.sort(key=lambda x: x[1], reverse=True)
 
             return keyword_scores[:top_n]
+        except ImportError:
+             logger.warning("sklearn not found. TF-IDF keywords unavailable.")
+             return []
         except Exception as e:
             logger.error(f"TF-IDF extraction failed: {e}")
             return []

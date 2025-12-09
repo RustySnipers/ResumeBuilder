@@ -17,7 +17,7 @@ from backend.auth.schemas import (
 )
 from backend.auth.dependencies import get_current_active_user
 from backend.auth.security import generate_api_key
-from backend.database.session import get_session
+from backend.database import get_db as get_session
 from backend.repositories.api_key_repository import APIKeyRepository
 from backend.repositories.audit_log_repository import AuditLogRepository
 from backend.models.user import User
@@ -25,7 +25,7 @@ import uuid
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/auth/api-keys", tags=["API Keys"])
+router = APIRouter(prefix="/api/v1/auth/api-keys", tags=["API Keys"])
 
 
 # ============================================================================
@@ -76,7 +76,7 @@ async def create_api_key(
         user_id=current_user.id,
         resource="api_keys",
         resource_id=api_key.id,
-        metadata={"name": api_key_data.name, "scopes": api_key_data.scopes},
+        meta_data={"name": api_key_data.name, "scopes": api_key_data.scopes},
     )
     await session.commit()
 
@@ -241,7 +241,7 @@ async def update_api_key(
         user_id=current_user.id,
         resource="api_keys",
         resource_id=updated_key.id,
-        metadata={"updated_fields": list(update_data.keys())},
+        meta_data={"updated_fields": list(update_data.keys())},
     )
     await session.commit()
 
@@ -303,7 +303,7 @@ async def revoke_api_key(
         user_id=current_user.id,
         resource="api_keys",
         resource_id=api_key.id,
-        metadata={"name": api_key.name},
+        meta_data={"name": api_key.name},
     )
 
     # Delete API key

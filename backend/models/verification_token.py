@@ -4,11 +4,12 @@ Verification Token Model
 Handles email verification and password reset tokens.
 """
 
-from sqlalchemy import Column, String, DateTime, Boolean, Integer, Enum as SQLEnum, ForeignKey
+from sqlalchemy import Column, String, DateTime, Boolean, Integer, Enum as SQLEnum, ForeignKey, Uuid as UUID
 from sqlalchemy.orm import relationship
 from datetime import datetime, timedelta
 import secrets
 import enum
+import uuid
 
 from backend.database import Base
 
@@ -30,7 +31,7 @@ class VerificationToken(Base):
     __tablename__ = "verification_tokens"
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    user_id = Column(UUID, ForeignKey("users.id"), nullable=False, index=True)
     token = Column(String(64), unique=True, nullable=False, index=True)
     token_type = Column(SQLEnum(TokenType), nullable=False)
     expires_at = Column(DateTime, nullable=False, index=True)
@@ -55,7 +56,7 @@ class VerificationToken(Base):
     @classmethod
     def create_email_verification_token(
         cls,
-        user_id: int,
+        user_id: uuid.UUID,
         expires_hours: int = 24,
         ip_address: str = None
     ) -> "VerificationToken":
@@ -81,7 +82,7 @@ class VerificationToken(Base):
     @classmethod
     def create_password_reset_token(
         cls,
-        user_id: int,
+        user_id: uuid.UUID,
         expires_hours: int = 1,
         ip_address: str = None
     ) -> "VerificationToken":

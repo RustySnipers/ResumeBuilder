@@ -4,8 +4,7 @@ Role Model - Phase 4
 Represents user roles for role-based access control (RBAC).
 """
 
-from sqlalchemy import Column, String, DateTime, Text
-from sqlalchemy.dialects.postgresql import UUID, JSONB
+from sqlalchemy import Column, String, Uuid as UUID, JSON as JSONB, DateTime, Text
 from sqlalchemy.orm import relationship
 from datetime import datetime
 import uuid

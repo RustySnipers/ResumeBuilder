@@ -3,7 +3,7 @@
 FastAPI endpoints for resume CRUD operations with webhook triggers.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File, Form
 from sqlalchemy.ext.asyncio import AsyncSession
 from uuid import UUID
 from datetime import datetime
@@ -16,11 +16,12 @@ from backend.resumes.schemas import (
     ResumeListResponse,
     ResumeDeleteResponse,
 )
-from backend.auth.dependencies import get_current_active_user
-from backend.database.session import get_session
+from backend.auth.guest import get_guest_user
+from backend.database import get_db as get_session
 from backend.repositories.resume_repository import ResumeRepository
 from backend.repositories.audit_log_repository import AuditLogRepository
 from backend.models.user import User
+from backend.models.resume import Resume
 from backend.models.webhook import WebhookEventType
 from backend.webhooks.service import WebhookService
 from backend.nlp.pii_detector import PIIDetector
@@ -33,10 +34,96 @@ router = APIRouter(prefix="/api/v1/resumes", tags=["Resumes"])
 pii_detector = PIIDetector()
 
 
+from backend.resumes.parser_service import DocumentParserService
+from backend.analysis.service import AnalysisService
+from backend.llm.local_llm_client import LocalLLMClient
+from backend.llm.dependencies import get_llm_client
+from backend.config import get_settings
+from fastapi import UploadFile, File, Depends
+
+@router.post("/upload", response_model=ResumeResponse, status_code=status.HTTP_201_CREATED)
+async def upload_resume(
+    file: UploadFile = File(...),
+    title: str = None,
+    current_user: User = Depends(get_guest_user),
+    session: AsyncSession = Depends(get_session),
+    llm_client: LocalLLMClient = Depends(get_llm_client),
+):
+    """
+    Upload and parse an existing resume (PDF/DOCX).
+    """
+    resume_repo = ResumeRepository(session)
+    audit_repo = AuditLogRepository(session)
+    
+    try:
+        # Parse content
+        extracted_text = await DocumentParserService.parse_resume(file)
+        
+        if not extracted_text:
+            raise HTTPException(status_code=400, detail="Could not extract text from file")
+            
+        # NEW: Structure content for Export
+        # llm_client is now injected via Depends (Singleton), preventing reload!
+        settings = get_settings()
+        analysis_service = AnalysisService(settings, llm_client)
+        
+        parsed_json = {}
+        if extracted_text:
+            # We fire and forget this or await it? 
+            # Awaiting it adds ~5-10s to upload time but ensures Export works immediately.
+            # Given "Analysis Failed" history, user expects some delay.
+            parsed_json = await analysis_service.structure_resume_text(extracted_text)
+
+        # Detect PII
+        redacted_text, pii_entities = pii_detector.detect_and_redact(extracted_text)
+
+        # Get next version
+        latest_version = await resume_repo.get_latest_version(
+            user_id=current_user.id,
+            title=title
+        )
+        
+        # Ensure title is not None
+        safe_title = title or file.filename or "Uploaded Resume"
+
+        # Create resume
+        resume = Resume(
+            user_id=current_user.id,
+            title=safe_title,
+            raw_text=extracted_text,
+            parsed_data=parsed_json,
+            redacted_text=redacted_text,
+            version=latest_version + 1,
+        )
+        
+        session.add(resume)
+        await session.flush()
+        
+        # Log
+        await audit_repo.log_event(
+            action="resume_uploaded",
+            user_id=current_user.id,
+            resource="resumes",
+            resource_id=resume.id,
+            meta_data={"filename": file.filename, "content_type": file.content_type},
+        )
+        await session.commit()
+        await session.refresh(resume)
+        
+        return resume
+        
+    except Exception as e:
+        logger.error(f"Upload failed: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Upload failed: {str(e)}"
+        )
+
+
 @router.post("", response_model=ResumeResponse, status_code=status.HTTP_201_CREATED)
 async def create_resume(
     resume_data: ResumeCreate,
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(get_guest_user),
     session: AsyncSession = Depends(get_session),
 ):
     """
@@ -50,7 +137,7 @@ async def create_resume(
 
     try:
         # Redact PII from resume text
-        redacted_text = pii_detector.redact_pii(resume_data.raw_text)
+        redacted_text, _ = pii_detector.detect_and_redact(resume_data.raw_text)
 
         # Get next version number for this title
         latest_version = await resume_repo.get_latest_version(
@@ -77,7 +164,7 @@ async def create_resume(
             user_id=current_user.id,
             resource="resumes",
             resource_id=resume.id,
-            metadata={"title": resume.title, "version": resume.version},
+            meta_data={"title": resume.title, "version": resume.version},
         )
 
         await session.commit()
@@ -118,7 +205,7 @@ async def create_resume(
 async def list_resumes(
     limit: int = Query(50, ge=1, le=100, description="Maximum resumes to return"),
     offset: int = Query(0, ge=0, description="Number of resumes to skip"),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(get_guest_user),
     session: AsyncSession = Depends(get_session),
 ):
     """
@@ -155,7 +242,7 @@ async def list_resumes(
 @router.get("/{resume_id}", response_model=ResumeResponse)
 async def get_resume(
     resume_id: UUID,
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(get_guest_user),
     session: AsyncSession = Depends(get_session),
 ):
     """
@@ -197,7 +284,7 @@ async def get_resume(
 async def update_resume(
     resume_id: UUID,
     resume_data: ResumeUpdate,
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(get_guest_user),
     session: AsyncSession = Depends(get_session),
 ):
     """
@@ -232,7 +319,8 @@ async def update_resume(
         if resume_data.raw_text is not None:
             resume.raw_text = resume_data.raw_text
             # Redact PII from new content
-            resume.redacted_text = pii_detector.redact_pii(resume_data.raw_text)
+            redacted_text, _ = pii_detector.detect_and_redact(resume_data.raw_text)
+            resume.redacted_text = redacted_text
 
         # Log audit event
         await audit_repo.log_event(
@@ -240,7 +328,7 @@ async def update_resume(
             user_id=current_user.id,
             resource="resumes",
             resource_id=resume.id,
-            metadata={"title": resume.title, "version": resume.version},
+            meta_data={"title": resume.title, "version": resume.version},
         )
 
         await session.commit()
@@ -282,7 +370,7 @@ async def update_resume(
 @router.delete("/{resume_id}", response_model=ResumeDeleteResponse)
 async def delete_resume(
     resume_id: UUID,
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(get_guest_user),
     session: AsyncSession = Depends(get_session),
 ):
     """
@@ -325,7 +413,7 @@ async def delete_resume(
             user_id=current_user.id,
             resource="resumes",
             resource_id=resume.id,
-            metadata={"title": resume.title, "version": resume.version},
+            meta_data={"title": resume.title, "version": resume.version},
         )
 
         # Delete resume

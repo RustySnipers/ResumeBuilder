@@ -12,7 +12,7 @@ from uuid import UUID, uuid4
 from sqlalchemy import DateTime, String, JSON, Integer, Enum as SQLEnum, ForeignKey, Index
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from backend.models.base import Base
+from backend.database import Base
 
 if TYPE_CHECKING:
     from backend.models.user import User
@@ -90,7 +90,7 @@ class UserActivity(Base):
     response_time_ms: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
     # Additional context (JSON for flexibility)
-    metadata: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    meta_data: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
 
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(
@@ -125,7 +125,7 @@ class UserActivity(Base):
         method: Optional[str] = None,
         status_code: Optional[int] = None,
         response_time_ms: Optional[int] = None,
-        metadata: Optional[dict] = None,
+        meta_data: Optional[dict] = None,
     ) -> "UserActivity":
         """Create a new user activity record
 
@@ -139,7 +139,7 @@ class UserActivity(Base):
             method: HTTP method
             status_code: HTTP status code
             response_time_ms: Response time in milliseconds
-            metadata: Additional context as JSON
+            meta_data: Additional context as JSON
 
         Returns:
             UserActivity instance
@@ -154,5 +154,5 @@ class UserActivity(Base):
             method=method,
             status_code=status_code,
             response_time_ms=response_time_ms,
-            metadata=metadata or {},
+            meta_data=meta_data or {},
         )

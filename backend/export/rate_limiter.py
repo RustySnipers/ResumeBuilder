@@ -5,9 +5,13 @@ Rate limiting specifically for export endpoints to prevent abuse.
 """
 
 import time
-from redis import Redis
 from fastapi import HTTPException, status
 import logging
+
+try:
+    from redis import Redis
+except ImportError:
+    Redis = None
 
 logger = logging.getLogger(__name__)
 

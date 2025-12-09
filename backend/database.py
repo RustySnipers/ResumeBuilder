@@ -29,11 +29,10 @@ from backend.config import is_lite_mode
 # ============================================================================
 
 _LITE_MODE = is_lite_mode()
-_lite_temp_dir: Optional[tempfile.TemporaryDirectory[str]] = None
 
 if _LITE_MODE:
-    _lite_temp_dir = tempfile.TemporaryDirectory()
-    default_sqlite_path = Path(_lite_temp_dir.name) / "lite.db"
+    # Use persistent database in project root for Lite mode
+    default_sqlite_path = Path("resume_builder.db").absolute()
     DATABASE_URL = os.environ.get(
         "DATABASE_URL",
         f"sqlite+aiosqlite:///{default_sqlite_path}",
@@ -128,8 +127,7 @@ async def close_db() -> None:
     Call this during application shutdown to ensure clean connection closure.
     """
     await engine.dispose()
-    if _lite_temp_dir:
-        _lite_temp_dir.cleanup()
+    await engine.dispose()
 
 
 # ============================================================================

@@ -50,7 +50,8 @@ TODO Phase 5: Production Features
 from __future__ import annotations
 
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from typing import List, TYPE_CHECKING
 import logging
@@ -76,6 +77,7 @@ from backend.auth.api_key_router import router as api_key_router
 
 # Import Resume router (Phase 7)
 from backend.resumes.router import router as resume_router
+from backend.jobs.router import router as job_router
 
 # Conditional routers that may rely on heavier dependencies
 analytics_router = None
@@ -93,9 +95,13 @@ if TYPE_CHECKING:
 if not LITE_MODE:
     from backend.llm.claude_client import ClaudeClient
     from backend.auth.rate_limiter import UserRateLimiter
-    from backend.export.router import router as export_router
+    from backend.llm.claude_client import ClaudeClient
+    from backend.auth.rate_limiter import UserRateLimiter
     from backend.analytics.router import router as analytics_router
     from backend.webhooks.router import router as webhook_router
+
+# Always import export router (safe for Lite Mode)
+from backend.export.router import router as export_router
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -116,8 +122,7 @@ app.include_router(auth_router)
 app.include_router(api_key_router)
 
 # Include Phase 5 export router
-if export_router and not LITE_MODE:
-    app.include_router(export_router)
+app.include_router(export_router)
 
 # Include Phase 6 analytics router
 if analytics_router and not LITE_MODE:
@@ -129,6 +134,11 @@ if webhook_router and not LITE_MODE:
 
 # Include Phase 7 resume router
 app.include_router(resume_router)
+app.include_router(job_router)
+
+# Mount static files
+app.mount("/static", StaticFiles(directory="backend/static"), name="static")
+app.mount("/assets", StaticFiles(directory="backend/static/assets"), name="assets")
 
 # Initialize lazy service placeholders
 pii_detector = None
@@ -509,10 +519,15 @@ async def shutdown_event():
 @app.get("/")
 async def root():
     """
-    Root health check endpoint.
+    Serve the Resume Builder UI.
+    """
+    return FileResponse('backend/static/index.html')
 
-    Returns basic service information and operational status.
-    Use /health for detailed health checks.
+
+@app.get("/api/info")
+async def api_info():
+    """
+    API Information endpoint.
     """
     cache = await get_llm_cache()
     cache_stats = await cache.get_stats() if cache else {}

@@ -4,8 +4,7 @@ Analysis Model - Phase 2.1
 Represents gap analysis results between resumes and job descriptions.
 """
 
-from sqlalchemy import Column, DateTime, ForeignKey, Numeric
-from sqlalchemy.dialects.postgresql import UUID, JSONB
+from sqlalchemy import Column, String, DateTime, ForeignKey, JSON, Uuid as UUID, JSON as JSONB, Numeric
 from sqlalchemy.orm import relationship
 from datetime import datetime
 import uuid

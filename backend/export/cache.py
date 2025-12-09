@@ -7,8 +7,12 @@ Caching for export results to improve performance and reduce server load.
 import hashlib
 import json
 from typing import Optional
-from redis import Redis
 import logging
+
+try:
+    from redis import Redis
+except ImportError:
+    Redis = None
 
 logger = logging.getLogger(__name__)
 

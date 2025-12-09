@@ -23,7 +23,19 @@ A secure FastAPI backend for generating ATS-friendly resumes with mandatory PII 
 - `tests/`: Unit and integration coverage for NLP, LLM retry logic, repositories, and export flows.
 - Deployment docs: `DEPLOYMENT.md`, `DEPLOYMENT_GUIDE.md`, `LOCAL_DEPLOYMENT.md`, `docker-compose.yml`.
 
-## Getting Started
+## Quick Start (One-Click)
+The easiest way to run the application is using the launcher script, which automatically handles environment setup and dependency installation:
+
+```bash
+python3 launcher.py
+```
+This will:
+1. Create a virtual environment (`.venv`) if one doesn't exist.
+2. Install necessary dependencies from `requirements-lite.txt`.
+3. Start the server in "Lite Mode" (no heavy ML libraries required).
+4. Automatically open your browser to the Resume Builder.
+
+## Manual Setup (Developers)
 1. **Install prerequisites**
    - Python 3.10+
    - Optional services: PostgreSQL + Redis (used for persistence and caching)

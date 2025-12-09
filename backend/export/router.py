@@ -13,11 +13,12 @@ import os
 
 from backend.export.pdf_generator import PDFGenerator
 from backend.export.docx_generator import DOCXGenerator
+from backend.export.markdown_generator import MarkdownGenerator
 from backend.export.template_engine import TemplateEngine
 from backend.export.rate_limiter import ExportRateLimiter
 from backend.export.cache import ExportCache
-from backend.auth.dependencies import get_current_active_user
-from backend.database.session import get_session
+from backend.auth.guest import get_guest_user
+from backend.database import get_db as get_session
 from backend.repositories.resume_repository import ResumeRepository
 from backend.repositories.audit_log_repository import AuditLogRepository
 from backend.models.user import User
@@ -65,7 +66,7 @@ class TemplateInfo(BaseModel):
 @router.post("/pdf")
 async def export_pdf(
     export_request: ExportRequest,
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(get_guest_user),
     session: AsyncSession = Depends(get_session),
 ):
     """
@@ -141,8 +142,11 @@ async def export_pdf(
         "email": current_user.email,
         "title": resume.title,
         "raw_text": resume.raw_text,
-        # Add more fields as needed from resume object
     }
+    
+    # Merge structured data if available
+    if resume.parsed_data:
+        resume_data.update(resume.parsed_data)
 
     # Generate PDF
     try:
@@ -173,7 +177,7 @@ async def export_pdf(
             user_id=current_user.id,
             resource="resumes",
             resource_id=resume.id,
-            metadata={"format": "pdf", "template": export_request.template, "size_bytes": len(pdf_bytes)},
+            meta_data={"format": "pdf", "template": export_request.template, "size_bytes": len(pdf_bytes)},
         )
         await session.commit()
 
@@ -247,7 +251,7 @@ async def export_pdf(
 @router.post("/docx")
 async def export_docx(
     export_request: ExportRequest,
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(get_guest_user),
     session: AsyncSession = Depends(get_session),
 ):
     """
@@ -323,8 +327,11 @@ async def export_docx(
         "email": current_user.email,
         "title": resume.title,
         "raw_text": resume.raw_text,
-        # Add more fields as needed
     }
+
+    # Merge structured data if available
+    if resume.parsed_data:
+        resume_data.update(resume.parsed_data)
 
     # Generate DOCX
     try:
@@ -355,7 +362,7 @@ async def export_docx(
             user_id=current_user.id,
             resource="resumes",
             resource_id=resume.id,
-            metadata={"format": "docx", "template": export_request.template, "size_bytes": len(docx_bytes)},
+            meta_data={"format": "docx", "template": export_request.template, "size_bytes": len(docx_bytes)},
         )
         await session.commit()
 
@@ -420,6 +427,99 @@ async def export_docx(
             # Log webhook error but don't mask the original error
             logger.error(f"Failed to trigger webhook for export failure: {webhook_error}")
 
+@router.post("/markdown")
+async def export_markdown(
+    export_request: ExportRequest,
+    current_user: User = Depends(get_guest_user),
+    session: AsyncSession = Depends(get_session),
+):
+    """
+    Export resume as Markdown.
+    """
+    # Check rate limit
+    rate_limit_info = export_rate_limiter.check_rate_limit(
+        user_id=str(current_user.id),
+        operation="markdown"
+    )
+
+    resume_repo = ResumeRepository(session)
+    audit_repo = AuditLogRepository(session)
+
+    # Get resume
+    try:
+        resume_uuid = uuid.UUID(export_request.resume_id)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid resume ID format",
+        )
+
+    resume = await resume_repo.get_by_id(resume_uuid)
+
+    if not resume:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Resume not found",
+        )
+
+    # Verify ownership
+    if resume.user_id != current_user.id:
+        user_roles = [role.name for role in current_user.roles]
+        if "admin" not in user_roles:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not authorized to export this resume",
+            )
+
+    # Prepare resume data
+    resume_data = {
+        "name": current_user.full_name,
+        "email": current_user.email,
+        "title": resume.title,
+        "raw_text": resume.raw_text,
+    }
+
+    # Merge structured data if available
+    if resume.parsed_data:
+        resume_data.update(resume.parsed_data)
+
+    # Generate Markdown
+    try:
+        md_generator = MarkdownGenerator()
+        md_content = md_generator.generate(
+            resume_data=resume_data
+        )
+        md_bytes = md_content.encode("utf-8")
+
+        # Log export
+        await audit_repo.log_event(
+            action="resume_exported",
+            user_id=current_user.id,
+            resource="resumes",
+            resource_id=resume.id,
+            meta_data={"format": "markdown", "size_bytes": len(md_bytes)},
+        )
+        await session.commit()
+
+        # Return Markdown file
+        filename = f"resume_{resume.title.replace(' ', '_')}.md"
+        return Response(
+            content=md_bytes,
+            media_type="text/markdown",
+            headers={
+                "Content-Disposition": f"attachment; filename={filename}",
+                "Content-Length": str(len(md_bytes)),
+                "X-RateLimit-Remaining-Minute": str(rate_limit_info.get("remaining_minute", -1)),
+            },
+        )
+
+    except Exception as e:
+        logger.error(f"Markdown generation failed: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Markdown generation failed: {str(e)}",
+        )
+
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"DOCX generation failed: {str(e)}",
@@ -429,7 +529,7 @@ async def export_docx(
 @router.post("/preview")
 async def generate_preview(
     export_request: ExportRequest,
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(get_guest_user),
     session: AsyncSession = Depends(get_session),
 ):
     """
@@ -500,7 +600,7 @@ async def generate_preview(
 
 @router.get("/templates", response_model=list[TemplateInfo])
 async def list_templates(
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(get_guest_user),
 ):
     """
     List available resume templates.
@@ -516,7 +616,7 @@ async def list_templates(
 @router.get("/templates/{template_id}", response_model=TemplateInfo)
 async def get_template(
     template_id: str,
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(get_guest_user),
 ):
     """
     Get details of a specific template.

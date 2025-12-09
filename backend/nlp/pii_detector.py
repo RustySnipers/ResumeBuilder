@@ -8,7 +8,7 @@ This module provides enhanced PII detection capabilities including:
 - Fallback regex patterns for structured PII (email, phone, SSN, addresses)
 """
 
-import spacy
+
 import re
 from typing import Dict, List, Tuple
 import logging
@@ -22,7 +22,11 @@ class PIIDetector:
     def __init__(self):
         """Initialize the PII detector with spaCy model and regex patterns."""
         try:
+            import spacy
             self.nlp = spacy.load('en_core_web_lg')
+        except ImportError:
+            logger.warning("spacy not found. PII detection falling back to regex-only.")
+            self.nlp = None
         except OSError:
             logger.warning("spaCy model 'en_core_web_lg' not found. Falling back to regex-only detection.")
             self.nlp = None

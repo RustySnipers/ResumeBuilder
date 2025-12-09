@@ -8,10 +8,7 @@ This module provides semantic similarity analysis capabilities including:
 - Skills extraction using NLP
 """
 
-from sentence_transformers import SentenceTransformer
-import numpy as np
 from typing import Dict, List
-import spacy
 import logging
 
 logger = logging.getLogger(__name__)
@@ -22,14 +19,30 @@ class SemanticAnalyzer:
 
     def __init__(self):
         """Initialize the semantic analyzer with models."""
+        self.model = None
+        self.nlp = None
+        self.np = None
+        
         try:
+            import numpy as np
+            self.np = np
+        except ImportError:
+            logger.warning("numpy not found. Semantic analysis functionality will be limited.")
+
+        try:
+            from sentence_transformers import SentenceTransformer
             self.model = SentenceTransformer('all-MiniLM-L6-v2')
+        except ImportError:
+            logger.warning("sentence-transformers not found. Semantic analysis will be disabled.")
         except Exception as e:
             logger.error(f"Failed to load SentenceTransformer model: {e}")
             self.model = None
 
         try:
+            import spacy
             self.nlp = spacy.load('en_core_web_lg')
+        except ImportError:
+             logger.warning("spacy not found. NLP features will be disabled.")
         except OSError:
             logger.warning("spaCy model 'en_core_web_lg' not found.")
             self.nlp = None
@@ -70,10 +83,13 @@ class SemanticAnalyzer:
             jd_embedding = self.model.encode(job_desc)
 
             # Cosine similarity
-            similarity = np.dot(resume_embedding, jd_embedding) / (
-                np.linalg.norm(resume_embedding) * np.linalg.norm(jd_embedding)
-            )
-            return float(similarity)
+            if self.np:
+                similarity = self.np.dot(resume_embedding, jd_embedding) / (
+                    self.np.linalg.norm(resume_embedding) * self.np.linalg.norm(jd_embedding)
+                )
+                return float(similarity)
+            else:
+                return 0.0
         except Exception as e:
             logger.error(f"Similarity calculation failed: {e}")
             return 0.0
@@ -109,10 +125,13 @@ class SemanticAnalyzer:
 
             try:
                 section_embedding = self.model.encode(section_text)
-                similarity = np.dot(section_embedding, jd_embedding) / (
-                    np.linalg.norm(section_embedding) * np.linalg.norm(jd_embedding)
-                )
-                section_scores[section_name] = float(similarity)
+                if self.np:
+                    similarity = self.np.dot(section_embedding, jd_embedding) / (
+                        self.np.linalg.norm(section_embedding) * self.np.linalg.norm(jd_embedding)
+                    )
+                    section_scores[section_name] = float(similarity)
+                else:
+                    section_scores[section_name] = 0.0
             except Exception as e:
                 logger.error(f"Section similarity calculation failed for {section_name}: {e}")
                 section_scores[section_name] = 0.0

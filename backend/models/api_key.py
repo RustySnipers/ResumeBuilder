@@ -4,8 +4,7 @@ APIKey Model - Phase 4
 Represents API keys for programmatic access to the API.
 """
 
-from sqlalchemy import Column, String, Boolean, DateTime, ForeignKey
-from sqlalchemy.dialects.postgresql import UUID, JSONB
+from sqlalchemy import Column, String, DateTime, ForeignKey, Uuid as UUID, JSON as JSONB, Boolean
 from sqlalchemy.orm import relationship
 from datetime import datetime
 import uuid

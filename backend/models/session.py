@@ -4,8 +4,7 @@ Session Model - Phase 4
 Represents user sessions for refresh token management.
 """
 
-from sqlalchemy import Column, String, DateTime, ForeignKey, Text
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import Column, String, DateTime, ForeignKey, Uuid as UUID, Text
 from sqlalchemy.orm import relationship
 from datetime import datetime
 import uuid
